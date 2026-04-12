@@ -1,0 +1,8 @@
+# PlatformIO build files
+.pio/
+.vscode/
+
+# Compiled object files
+*.o
+*.elf
+*.bin
