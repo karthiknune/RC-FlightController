@@ -3,6 +3,7 @@
 #include "datatypes.h"
 #include "math/pid.h"
 #include "config.h"
+#include "hal/comms/lora.h"
 
 IMUData currentIMU; // Global variable to hold our sensor state
 
@@ -36,6 +37,7 @@ void setup() {
     while (!Serial); 
     
     IMU_Init();
+    LoRa_Init();
 
     // Create the FreeRTOS Task
     xTaskCreatePinnedToCore(

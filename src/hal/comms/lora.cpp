@@ -1,5 +1,7 @@
+#include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
+#include "hal/comms/lora.h"
 
 // ESP32 Feather V2 Corrected SPI Pins (UNCHANGED)
 #define SCK_PIN   5
@@ -79,7 +81,7 @@ void vSerialTask(void *pvParameters) {
 // ----------------------------------------------------------------
 // SETUP: Initialization & Task Spawning
 // ----------------------------------------------------------------
-void setup() {
+void LoRa_Init() {
   Serial.begin(115200);
   while (!Serial);
 
@@ -127,13 +129,4 @@ void setup() {
   );
 
   Serial.println("[SYSTEM] FreeRTOS Tasks Spawned. Ready.");
-}
-
-// ----------------------------------------------------------------
-// LOOP: Deleted
-// ----------------------------------------------------------------
-void loop() {
-  // In a pure FreeRTOS architecture, the default Arduino loop() is useless overhead.
-  // We delete the loop task to free up CPU cycles and RAM.
-  vTaskDelete(NULL); 
 }
