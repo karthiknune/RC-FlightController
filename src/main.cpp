@@ -5,7 +5,7 @@
 #include "config.h"
 #include "hal/comms/lora.h"
 
-IMUData currentIMU; // Global variable to hold our sensor state
+IMUData_raw currentIMU; // Global variable to hold our sensor state
 
 ///pid initialisations
 PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_integral);
@@ -37,7 +37,9 @@ void setup() {
     while (!Serial); 
     
     IMU_Init();
-    LoRa_Init();
+    if (!lora_init()) {
+        Serial.println("LoRa init failed.");
+    }
 
     // Create the FreeRTOS Task
     xTaskCreatePinnedToCore(

@@ -1,132 +1,106 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
+#include <string.h>
 #include "hal/comms/lora.h"
 
-// ESP32 Feather V2 Corrected SPI Pins (UNCHANGED)
-#define SCK_PIN   5
-#define MOSI_PIN  19 
-#define MISO_PIN  21 
+namespace {
 
-// SX1276 Control Pins (UNCHANGED)
-#define CS_PIN    27
-#define RST_PIN   32
-#define IRQ_PIN   14
+constexpr int SCK_PIN = 5;
+constexpr int MOSI_PIN = 19;
+constexpr int MISO_PIN = 21;
 
-#define LORA_FREQ 915E6 
-#define SYNC_WORD 0xF3
+constexpr int CS_PIN = 27;
+constexpr int RST_PIN = 32;
+constexpr int IRQ_PIN = 14;
 
-uint32_t telemetry_seq = 0;
+constexpr long LORA_FREQ = 915000000L;
+constexpr uint8_t SYNC_WORD = 0xF3;
 
-// FreeRTOS Mutex for protecting the LoRa SPI bus
-SemaphoreHandle_t xLoRaMutex;
+SemaphoreHandle_t g_lora_mutex = nullptr;
+bool g_lora_ready = false;
 
-// ----------------------------------------------------------------
-// TASK 1: Periodic Telemetry
-// ----------------------------------------------------------------
-void vTelemetryTask(void *pvParameters) {
-  // FreeRTOS tasks must run in an infinite loop
-  for (;;) {
-    // Wait exactly 5000 ticks (milliseconds)
-    vTaskDelay(pdMS_TO_TICKS(5000));
+bool take_lora_lock() {
+  return (g_lora_mutex != nullptr) &&
+         (xSemaphoreTake(g_lora_mutex, portMAX_DELAY) == pdTRUE);
+}
 
-    // Attempt to take the Mutex (Wait forever if necessary)
-    if (xSemaphoreTake(xLoRaMutex, portMAX_DELAY) == pdTRUE) {
-      Serial.printf("[AUTO TX] Sending Telemetry [SEQ: %d]\n", telemetry_seq);
-
-      LoRa.beginPacket();
-      LoRa.print("TELEMETRY | SEQ: ");
-      LoRa.print(telemetry_seq);
-      LoRa.endPacket(); 
-
-      telemetry_seq++;
-
-      // We are done with the SPI bus. Give the Mutex back so the other task can use it.
-      xSemaphoreGive(xLoRaMutex);
-    }
+void give_lora_lock() {
+  if (g_lora_mutex != nullptr) {
+    xSemaphoreGive(g_lora_mutex);
   }
 }
 
-// ----------------------------------------------------------------
-// TASK 2: Serial Command Monitor
-// ----------------------------------------------------------------
-void vSerialTask(void *pvParameters) {
-  for (;;) {
-    if (Serial.available() > 0) {
-      String command = Serial.readStringUntil('\n');
-      command.trim();
+}  // namespace
 
-      if (command.length() > 0) {
-        // Attempt to take the Mutex before touching the LoRa module
-        if (xSemaphoreTake(xLoRaMutex, portMAX_DELAY) == pdTRUE) {
-          Serial.print("[MANUAL TX] Sending Command: ");
-          Serial.println(command);
-
-          LoRa.beginPacket();
-          LoRa.print("CMD: ");
-          LoRa.print(command);
-          LoRa.endPacket(); 
-
-          // Give the Mutex back
-          xSemaphoreGive(xLoRaMutex);
-        }
-      }
-    }
-    
-    // Crucial: A brief delay prevents this while-loop from hogging the CPU and triggering the Watchdog Timer
-    vTaskDelay(pdMS_TO_TICKS(50)); 
+bool lora_init() {
+  if (g_lora_ready) {
+    return true;
   }
-}
 
-// ----------------------------------------------------------------
-// SETUP: Initialization & Task Spawning
-// ----------------------------------------------------------------
-void LoRa_Init() {
-  Serial.begin(115200);
-  while (!Serial);
+  if (g_lora_mutex == nullptr) {
+    g_lora_mutex = xSemaphoreCreateMutex();
+    if (g_lora_mutex == nullptr) {
+      return false;
+    }
+  }
 
-  Serial.println("\n[SYSTEM] ESP32 Feather FreeRTOS TX Node Booting...");
-
-  // 1. Initialize Hardware (UNCHANGED)
   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, -1);
   LoRa.setSPI(SPI);
   LoRa.setPins(CS_PIN, RST_PIN, IRQ_PIN);
 
   if (!LoRa.begin(LORA_FREQ)) {
-    Serial.println("[FATAL] LoRa transceiver not detected. Halt.");
-    while (true); 
+    return false;
   }
 
-  LoRa.setSpreadingFactor(7); 
+  LoRa.setSpreadingFactor(7);
   LoRa.setSyncWord(SYNC_WORD);
+  g_lora_ready = true;
+  return true;
+}
 
-  // 2. Create the Mutex
-  xLoRaMutex = xSemaphoreCreateMutex();
-  if (xLoRaMutex == NULL) {
-    Serial.println("[FATAL] FreeRTOS Mutex creation failed. Halt.");
-    while (true);
+bool lora_send(const uint8_t *data, size_t length) {
+  if (!g_lora_ready || data == nullptr || length == 0 || !take_lora_lock()) {
+    return false;
   }
 
-  // 3. Spawn the Tasks
-  // xTaskCreate( FunctionName, "TaskName", StackSize, Parameters, Priority, TaskHandle );
-  
-  xTaskCreate(
-    vTelemetryTask,   
-    "TelemetryTask",  
-    4096,             // Stack size (4KB is plenty for simple SPI comms)
-    NULL,             
-    1,                // Priority (1 = Low)
-    NULL              
-  );
+  const int begin_result = LoRa.beginPacket();
+  const size_t bytes_written =
+      (begin_result == 1) ? LoRa.write(data, length) : 0;
+  const int end_result = (begin_result == 1) ? LoRa.endPacket() : 0;
 
-  xTaskCreate(
-    vSerialTask,      
-    "SerialTask",     
-    4096,             
-    NULL,             
-    2,                // Priority (2 = Higher than Telemetry, UI input feels instantly responsive)
-    NULL              
-  );
+  give_lora_lock();
+  return begin_result == 1 && bytes_written == length && end_result == 1;
+}
 
-  Serial.println("[SYSTEM] FreeRTOS Tasks Spawned. Ready.");
+bool lora_send(const char *message) {
+  if (message == nullptr) {
+    return false;
+  }
+
+  return lora_send(reinterpret_cast<const uint8_t *>(message), strlen(message));
+}
+
+size_t lora_receive(uint8_t *buffer, size_t max_length) {
+  if (!g_lora_ready || buffer == nullptr || max_length == 0 || !take_lora_lock()) {
+    return 0;
+  }
+
+  const int packet_size = LoRa.parsePacket();
+  if (packet_size <= 0) {
+    give_lora_lock();
+    return 0;
+  }
+
+  size_t bytes_read = 0;
+  while (LoRa.available() && bytes_read < max_length) {
+    buffer[bytes_read++] = static_cast<uint8_t>(LoRa.read());
+  }
+
+  while (LoRa.available()) {
+    (void)LoRa.read();
+  }
+
+  give_lora_lock();
+  return bytes_read;
 }
