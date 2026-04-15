@@ -25,7 +25,7 @@ void mode_stabilize_run() {
     float des_pitch = get_des_pitch();
     float des_throttle = get_des_throttle();
 
-    float dt =0.1f;
+    float dt =0.1f; // shouldn't this dt be in config in case we wnat to change it later?
 
     float roll = roll_pid.compute(des_roll , actual_roll, dt);
     float pitch = pitch_pid.compute(des_pitch, actual_pitch, dt);
