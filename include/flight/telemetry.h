@@ -1,5 +1,4 @@
 #pragma once
 #include "datatypes.h"
-#include "hal/comms/lora.h"
 
-void telemetry_send(const telemetrydata &data); 
+bool telemetry_send(const telemetrydata &data);
