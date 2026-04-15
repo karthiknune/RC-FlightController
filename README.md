@@ -364,4 +364,5 @@ Known limitations:
 -  seperate imu_yaw and gps_heading
 - change roll control
 - sd card
+- lets make the level_pitch_output target to 2-3 degrees. 0 in some planes will not generate any lift
 
