@@ -252,13 +252,13 @@ void setup() {
     );
 
     xTaskCreatePinnedToCore(
-        TaskGPSRead,
-        "GPS_Task",
-        GPS_TASK_STACK_SIZE,
-        NULL,
-        GPS_TASK_PRIORITY,
-        NULL,
-        GPS_TASK_CORE
+        TaskGPSRead,            // Function to implement the task
+        "GPS_Task",             // Name of the task
+        GPS_TASK_STACK_SIZE,    // Stack size in words
+        NULL,                   // Task input parameter
+        GPS_TASK_PRIORITY,      // Priority
+        NULL,                   // Task handle
+        GPS_TASK_CORE           // Pin to Core 1
     );
 
     xTaskCreatePinnedToCore(
