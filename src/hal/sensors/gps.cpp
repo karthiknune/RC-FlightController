@@ -15,6 +15,7 @@ namespace {
 HardwareSerial gps_serial(GPS_UART_NUM);
 char gps_sentence_buffer[GPS_SENTENCE_BUFFER_SIZE] = {};
 size_t gps_sentence_length = 0;
+constexpr float kKnotsToMetersPerSecond = 0.514444f;
 
 void clear_fix_data(GPSData &data) {
     data.latitude = 0.0;
@@ -57,6 +58,15 @@ bool is_gga_sentence(const char *sentence_type) {
 
     return std::strcmp(sentence_type, "$GPGGA") == 0 ||
            std::strcmp(sentence_type, "$GNGGA") == 0;
+}
+
+bool is_rmc_sentence(const char *sentence_type) {
+    if (sentence_type == nullptr) {
+        return false;
+    }
+
+    return std::strcmp(sentence_type, "$GPRMC") == 0 ||
+           std::strcmp(sentence_type, "$GNRMC") == 0;
 }
 
 bool parse_int_field(const char *field, int &value) {
@@ -209,6 +219,35 @@ bool parse_gga_sentence(char *sentence, GPSData &data) {
     return true;
 }
 
+bool parse_rmc_sentence(char *sentence, GPSData &data) {
+    char *fields[GPS_MAX_FIELDS] = {};
+    const size_t field_count = split_nmea_fields(sentence, fields, GPS_MAX_FIELDS);
+
+    if (field_count <= 8 || !is_rmc_sentence(fields[0])) {
+        return false;
+    }
+
+    data.healthy = true;
+    parse_local_time(fields[1], data.local_time);
+
+    const bool valid_fix = fields[2] != nullptr &&
+                           (fields[2][0] == 'A' || fields[2][0] == 'a');
+    if (!valid_fix) {
+        data.speed = 0.0f;
+        data.heading = 0.0f;
+        return true;
+    }
+
+    float speed_knots = 0.0f;
+    float track_heading = 0.0f;
+    parse_float_field(fields[7], speed_knots);
+    parse_float_field(fields[8], track_heading);
+
+    data.speed = speed_knots * kKnotsToMetersPerSecond;
+    data.heading = track_heading;
+    return true;
+}
+
 bool process_incoming_byte(char incoming_byte, GPSData &data) {
     if (incoming_byte == '\r') {
         return false;
@@ -220,10 +259,18 @@ bool process_incoming_byte(char incoming_byte, GPSData &data) {
         }
 
         gps_sentence_buffer[gps_sentence_length] = '\0';
-        const bool parsed_gga = parse_gga_sentence(gps_sentence_buffer, data);
+        bool parsed_sentence = false;
+        if (parse_gga_sentence(gps_sentence_buffer, data)) {
+            parsed_sentence = true;
+            if (GPS_DEBUG_OUTPUT_ENABLED) {
+                GPS_PrintStatus(Serial, data);
+            }
+        } else if (parse_rmc_sentence(gps_sentence_buffer, data)) {
+            parsed_sentence = true;
+        }
 
         gps_sentence_length = 0;
-        return parsed_gga;
+        return parsed_sentence;
     }
 
     if (gps_sentence_length >= (GPS_SENTENCE_BUFFER_SIZE - 1)) {

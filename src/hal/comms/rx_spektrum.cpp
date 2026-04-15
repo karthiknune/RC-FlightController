@@ -42,7 +42,7 @@ float rx_to_throttle(float raw_pwm){
     {
         raw_pwm = 2000;
     }
-    return raw_pwm;
+    return raw_pwm - 1000.0f;
 }
 
 float get_des_roll() {

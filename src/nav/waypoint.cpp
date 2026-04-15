@@ -77,6 +77,8 @@ Navigation::Navigation() {
     mission_complete = false;
     target_heading = 0.0f;
     target_distance = 0.0f;
+    leg_reference_distance = 0.0f;
+    leg_progress_percent = 0.0f;
 }
 
 void Navigation::restart_mission() {
@@ -84,6 +86,8 @@ void Navigation::restart_mission() {
     mission_complete = false;
     target_heading = 0.0f;
     target_distance = 0.0f;
+    leg_reference_distance = 0.0f;
+    leg_progress_percent = 0.0f;
 }
 
 void Navigation::update(double current_lat, double current_lon, float current_alt){
@@ -93,6 +97,8 @@ void Navigation::update(double current_lat, double current_lon, float current_al
         mission_complete = true;
         target_heading = 0.0f;
         target_distance = 0.0f;
+        leg_reference_distance = 0.0f;
+        leg_progress_percent = 100.0f;
         return;
     }
     
@@ -114,17 +120,31 @@ void Navigation::update(double current_lat, double current_lon, float current_al
             target_wp.lon
         );
 
+        if (leg_reference_distance <= WAYPOINT_ACCEPTANCE_RADIUS_METERS) {
+            leg_reference_distance = target_distance;
+        }
+
+        const float effective_leg_distance =
+            std::fmax(leg_reference_distance, WAYPOINT_ACCEPTANCE_RADIUS_METERS);
+        leg_progress_percent =
+            100.0f * (1.0f - (target_distance / effective_leg_distance));
+        leg_progress_percent = std::fmax(0.0f, std::fmin(100.0f, leg_progress_percent));
+
         if (target_distance >= WAYPOINT_ACCEPTANCE_RADIUS_METERS) {
             return;
         }
 
         current_waypoint_index++;
+        leg_reference_distance = 0.0f;
+        leg_progress_percent = 100.0f;
     }
 
     if (current_waypoint_index >= num_waypoints) {
         mission_complete = true;
         target_heading = 0.0f;
         target_distance = 0.0f;
+        leg_reference_distance = 0.0f;
+        leg_progress_percent = 100.0f;
     }
 }
 
@@ -142,6 +162,33 @@ float Navigation::get_target_altitude() {
     }
 
     return missionwaypoints[current_waypoint_index].alt;
+}
+
+float Navigation::get_leg_progress_percent() {
+    return leg_progress_percent;
+}
+
+float Navigation::get_mission_progress_percent() {
+    if (num_waypoints <= 0) {
+        return 100.0f;
+    }
+
+    float completed_waypoints = static_cast<float>(current_waypoint_index);
+    if (!mission_complete && current_waypoint_index < num_waypoints) {
+        completed_waypoints += leg_progress_percent / 100.0f;
+    }
+
+    const float mission_progress =
+        100.0f * (completed_waypoints / static_cast<float>(num_waypoints));
+    return std::fmax(0.0f, std::fmin(100.0f, mission_progress));
+}
+
+int Navigation::get_current_waypoint_index() {
+    return current_waypoint_index;
+}
+
+int Navigation::get_total_waypoint_count() {
+    return num_waypoints;
 }
 
 bool Navigation::mission_completed() {

@@ -14,6 +14,10 @@ class Navigation{
         float get_target_heading();
         float get_target_distance();
         float get_target_altitude();
+        float get_leg_progress_percent();
+        float get_mission_progress_percent();
+        int get_current_waypoint_index();
+        int get_total_waypoint_count();
 
         bool mission_completed();
 
@@ -24,8 +28,12 @@ class Navigation{
         bool mission_complete = false;
         float target_heading = 0.0f;
         float target_distance = 0.0f;
+        float leg_reference_distance = 0.0f;
+        float leg_progress_percent = 0.0f;
 
 };  
+
+extern Navigation navigation;
 
 
 

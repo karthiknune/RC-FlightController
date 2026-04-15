@@ -9,4 +9,4 @@ bool telemetry_send(const telemetrydata &data) {
     return lora_send(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
 }
 
-//telemetry should have an interrupt for when a new packet is received from Lora
+//telemetry should have an interrupt for when a new packet is received from Lora?

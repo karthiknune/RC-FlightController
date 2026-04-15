@@ -20,6 +20,10 @@ constexpr int IRQ_PIN = 14;
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
+constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
+constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
+constexpr int TELEMETRY_TASK_PRIORITY = 1;
+constexpr int TELEMETRY_TASK_CORE = 1;
 // LoRa-------------
 
 // GPS-------------
@@ -91,6 +95,9 @@ const float max_alt_integral = 10.0f;
 //waypoints
 constexpr double NAV_EARTH_RADIUS_METERS = 6371000.0;
 constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
+constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
+constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
+constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 
 const int num_waypoints = 2;               
 const waypoint missionwaypoints[]= {

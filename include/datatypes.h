@@ -77,9 +77,21 @@ struct telemetrydata{
     float gps_speed;
     float gps_heading;
     int gps_sats;
+    int gps_fix_quality;
+    int gps_lock_acquired;
     float baro_altitude;
     float flightmode;
     float failsafe_status;
+    float waypoint_distance;
+    float waypoint_heading;
+    float waypoint_target_lat;
+    float waypoint_target_lon;
+    float waypoint_target_alt;
+    float waypoint_leg_progress;
+    float waypoint_mission_progress;
+    int waypoint_index;
+    int waypoint_total;
+    int waypoint_mission_complete;
 };
 
 

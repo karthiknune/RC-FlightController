@@ -5,6 +5,8 @@
 #include "hal/sensors/imu.h"
 #include "hal/sensors/gps.h"
 #include "hal/comms/lora.h"
+#include "flight/telemetry.h"
+#include "nav/waypoint.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
 GPSData gps_data = {};  // Global variable to hold GPS state
@@ -14,6 +16,40 @@ PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_inte
 PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitch_integral);
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
 PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
+
+telemetrydata BuildTelemetrySnapshot() {
+    telemetrydata snapshot = {};
+
+    snapshot.roll = currentIMU.roll;
+    snapshot.pitch = currentIMU.pitch;
+    snapshot.altitude = gps_data.altitude;
+    snapshot.des_altitude = navigation.get_target_altitude();
+    snapshot.gps_lat = static_cast<float>(gps_data.latitude);
+    snapshot.gps_long = static_cast<float>(gps_data.longitude);
+    snapshot.gps_alt = gps_data.altitude;
+    snapshot.gps_speed = gps_data.speed;
+    snapshot.gps_heading = gps_data.heading;
+    snapshot.gps_sats = gps_data.satellites;
+    snapshot.gps_fix_quality = gps_data.fix_quality;
+    snapshot.gps_lock_acquired = gps_data.lock_acquired ? 1 : 0;
+    snapshot.waypoint_distance = navigation.get_target_distance();
+    snapshot.waypoint_heading = navigation.get_target_heading();
+    snapshot.waypoint_target_alt = navigation.get_target_altitude();
+    snapshot.waypoint_leg_progress = navigation.get_leg_progress_percent();
+    snapshot.waypoint_mission_progress = navigation.get_mission_progress_percent();
+    snapshot.waypoint_index = navigation.get_current_waypoint_index();
+    snapshot.waypoint_total = navigation.get_total_waypoint_count();
+    snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
+
+    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
+        snapshot.waypoint_target_lat =
+            static_cast<float>(missionwaypoints[snapshot.waypoint_index].lat);
+        snapshot.waypoint_target_lon =
+            static_cast<float>(missionwaypoints[snapshot.waypoint_index].lon);
+    }
+
+    return snapshot;
+}
 
 
 
@@ -39,10 +75,24 @@ void TaskGPSRead(void *pvParameters) {
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        if (GPS_Read(gps_data) && GPS_DEBUG_OUTPUT_ENABLED) {   // currently, GPS functionality is limited to printing coordinates
-            GPS_PrintStatus(Serial, gps_data);
+        if (GPS_Read(gps_data)) {
+            if (gps_data.lock_acquired) {
+                navigation.update(gps_data.latitude, gps_data.longitude, gps_data.altitude);
+            }
         }
 
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskTelemetryTx(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        const telemetrydata snapshot = BuildTelemetrySnapshot();
+        (void)telemetry_send(snapshot);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
@@ -76,6 +126,16 @@ void setup() {
         GPS_TASK_PRIORITY,      // Priority (1 is high)
         NULL,                   // Task handle
         GPS_TASK_CORE           // Pin to Core 1
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskTelemetryTx,                // Function to implement the task
+        "Telemetry_Task",               // Name of the task
+        TELEMETRY_TASK_STACK_SIZE,      // Stack size in words
+        NULL,                           // Task input parameter
+        TELEMETRY_TASK_PRIORITY,        // Priority
+        NULL,                           // Task handle
+        TELEMETRY_TASK_CORE             // Pin to Core 1
     );
 }
 
