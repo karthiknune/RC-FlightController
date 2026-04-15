@@ -84,7 +84,7 @@ struct telemetrydata{
 
 
 struct waypoint{
-    float lat;
-    float lon;
+    double lat;
+    double lon;
     float alt;          ///////////////m
 };

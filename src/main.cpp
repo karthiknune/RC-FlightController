@@ -13,7 +13,7 @@ GPSData gps_data = {};  // Global variable to hold GPS state
 PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_integral);
 PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitch_integral);
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
-PIDController althold_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
+PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
 
 
 

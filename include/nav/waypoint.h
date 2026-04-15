@@ -8,7 +8,7 @@ class Navigation{
 
         void restart_mission(); 
         
-        void update(float current_lat, float current_lon, float current_alt);
+        void update(double current_lat, double current_lon, float current_alt);
 
         
         float get_target_heading();
@@ -24,10 +24,6 @@ class Navigation{
         bool mission_complete = false;
         float target_heading = 0.0f;
         float target_distance = 0.0f;
-        
-
-        const float acceptance_radius = 5.0f; ////wp achieved if within 5m from the defined coordnate
-        
 
 };  
 

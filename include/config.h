@@ -89,6 +89,8 @@ const float max_alt_integral = 10.0f;
 
 
 //waypoints
+constexpr double NAV_EARTH_RADIUS_METERS = 6371000.0;
+constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
 
 const int num_waypoints = 2;               
 const waypoint missionwaypoints[]= {
