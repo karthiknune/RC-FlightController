@@ -8,12 +8,16 @@ class Navigation{
 
         void restart_mission(); 
         
-        void update(float current_lat, float current_lon, float current_alt);
+        void update(double current_lat, double current_lon, float current_alt);
 
         
         float get_target_heading();
         float get_target_distance();
         float get_target_altitude();
+        float get_leg_progress_percent();
+        float get_mission_progress_percent();
+        int get_current_waypoint_index();
+        int get_total_waypoint_count();
 
         bool mission_completed();
 
@@ -21,15 +25,15 @@ class Navigation{
         int current_waypoint_index;
         
         //intitiates
-        bool mission_completed =false;
+        bool mission_complete = false;
         float target_heading = 0.0f;
         float target_distance = 0.0f;
-        
-
-        const float acceptance_radius = 5.0f; ////wp achieved if within 5m from the defined coordnate
-        
+        float leg_reference_distance = 0.0f;
+        float leg_progress_percent = 0.0f;
 
 };  
+
+extern Navigation navigation;
 
 
 

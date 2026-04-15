@@ -3,19 +3,9 @@
 #include <LoRa.h>
 #include <string.h>
 #include "hal/comms/lora.h"
+#include "../include/config.h"
 
 namespace {
-
-constexpr int SCK_PIN = 5;
-constexpr int MOSI_PIN = 19;
-constexpr int MISO_PIN = 21;
-
-constexpr int CS_PIN = 27;
-constexpr int RST_PIN = 32;
-constexpr int IRQ_PIN = 14;
-
-constexpr long LORA_FREQ = 915000000L;
-constexpr uint8_t SYNC_WORD = 0xF3;
 
 SemaphoreHandle_t g_lora_mutex = nullptr;
 bool g_lora_ready = false;

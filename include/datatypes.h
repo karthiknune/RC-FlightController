@@ -14,7 +14,19 @@ struct IMUData_filtered{
     float yaw;
 };
 
+struct GPSLocalTime {
+    int hour;
+    int minute;
+    int second;
+    bool valid;
+};
 
+struct GPSRawCoordinates {
+    char latitude[16];
+    char latitude_dir;
+    char longitude[16];
+    char longitude_dir;
+};
 
 struct GPSData {
     double latitude;
@@ -23,6 +35,10 @@ struct GPSData {
     float speed;
     float heading;
     int satellites;
+    int fix_quality;
+    GPSLocalTime local_time;
+    GPSRawCoordinates raw_coordinates;
+    bool lock_acquired;
     bool healthy; 
 };
 
@@ -61,14 +77,26 @@ struct telemetrydata{
     float gps_speed;
     float gps_heading;
     int gps_sats;
+    int gps_fix_quality;
+    int gps_lock_acquired;
     float baro_altitude;
     float flightmode;
     float failsafe_status;
+    float waypoint_distance;
+    float waypoint_heading;
+    float waypoint_target_lat;
+    float waypoint_target_lon;
+    float waypoint_target_alt;
+    float waypoint_leg_progress;
+    float waypoint_mission_progress;
+    int waypoint_index;
+    int waypoint_total;
+    int waypoint_mission_complete;
 };
 
 
 struct waypoint{
-    float lat;
-    float lon;
+    double lat;
+    double lon;
     float alt;          ///////////////m
 };

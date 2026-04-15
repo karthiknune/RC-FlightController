@@ -1,33 +1,216 @@
 #include <Arduino.h>
-#include "hal/sensors/imu.h"
 #include "datatypes.h"
 #include "math/pid.h"
 #include "config.h"
+#include "flight/flightmodes.h"
+#include "flight/motormixer.h"
+#include "hal/sensors/imu.h"
+#include "hal/sensors/baro.h"
+#include "hal/sensors/gps.h"
 #include "hal/comms/lora.h"
+#include "hal/comms/rx_spektrum.h"
+#include "hal/actuators/pwm_out.h"
+#include "flight/telemetry.h"
+#include "nav/waypoint.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
+IMUData_filtered imu_data = {};
+BarometerData baro_data = {};
+GPSData gps_data = {};  // Global variable to hold GPS state
+FlightMode active_flight_mode = DEFAULT_FLIGHT_MODE;
 
 ///pid initialisations
 PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_integral);
 PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitch_integral);
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
-PIDController althold_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
+PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
 
+namespace {
 
+bool g_flight_mode_initialized = false;
 
+void UpdateFilteredIMUData() {
+    imu_data.roll = currentIMU.roll;
+    imu_data.pitch = currentIMU.pitch;
 
-// FreeRTOS Task for IMU Reading
+    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
+        imu_data.yaw = gps_data.heading;
+    }
+}
+
+FlightMode DetermineFlightMode() {
+    const float flight_mode_pwm = get_flight_mode_pwm();
+
+    if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f) {
+        return DEFAULT_FLIGHT_MODE;
+    }
+
+    if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX) {
+        return FlightMode::Manual;
+    }
+
+    if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX) {
+        return FlightMode::Stabilize;
+    }
+
+    if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
+        return FlightMode::AltHold;
+    }
+
+    if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX) {
+        return FlightMode::Glide;
+    }
+
+    return FlightMode::Waypoint;
+}
+
+void InitializeFlightMode(FlightMode mode) {
+    switch (mode) {
+        case FlightMode::Manual:
+            mode_manual_init();
+            break;
+        case FlightMode::Stabilize:
+            mode_stabilize_init();
+            break;
+        case FlightMode::AltHold:
+            mode_alt_hold_init();
+            break;
+        case FlightMode::Glide:
+            mode_glide_init();
+            break;
+        case FlightMode::Waypoint:
+            navigation.restart_mission();
+            mode_waypoint_init();
+            break;
+    }
+}
+
+void RunFlightMode(FlightMode mode) {
+    switch (mode) {
+        case FlightMode::Manual:
+            mode_manual_run();
+            break;
+        case FlightMode::Stabilize:
+            mode_stabilize_run();
+            break;
+        case FlightMode::AltHold:
+            mode_alt_hold_run();
+            break;
+        case FlightMode::Glide:
+            mode_glide_run();
+            break;
+        case FlightMode::Waypoint:
+            mode_waypoint_run();
+            break;
+    }
+}
+
+} // namespace
+
+telemetrydata BuildTelemetrySnapshot() {
+    telemetrydata snapshot = {};
+
+    snapshot.roll = imu_data.roll;
+    snapshot.pitch = imu_data.pitch;
+    snapshot.yaw = imu_data.yaw;
+    snapshot.altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
+    snapshot.des_altitude = navigation.get_target_altitude();
+    snapshot.gps_lat = static_cast<float>(gps_data.latitude);
+    snapshot.gps_long = static_cast<float>(gps_data.longitude);
+    snapshot.gps_alt = gps_data.altitude;
+    snapshot.gps_speed = gps_data.speed;
+    snapshot.gps_heading = gps_data.heading;
+    snapshot.gps_sats = gps_data.satellites;
+    snapshot.gps_fix_quality = gps_data.fix_quality;
+    snapshot.gps_lock_acquired = gps_data.lock_acquired ? 1 : 0;
+    snapshot.baro_altitude = baro_data.altitude;
+    snapshot.flightmode = static_cast<float>(static_cast<int>(active_flight_mode));
+    snapshot.waypoint_distance = navigation.get_target_distance();
+    snapshot.waypoint_heading = navigation.get_target_heading();
+    snapshot.waypoint_target_alt = navigation.get_target_altitude();
+    snapshot.waypoint_leg_progress = navigation.get_leg_progress_percent();
+    snapshot.waypoint_mission_progress = navigation.get_mission_progress_percent();
+    snapshot.waypoint_index = navigation.get_current_waypoint_index();
+    snapshot.waypoint_total = navigation.get_total_waypoint_count();
+    snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
+
+    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
+        snapshot.waypoint_target_lat =
+            static_cast<float>(missionwaypoints[snapshot.waypoint_index].lat);
+        snapshot.waypoint_target_lon =
+            static_cast<float>(missionwaypoints[snapshot.waypoint_index].lon);
+    }
+
+    return snapshot;
+}
+
 void TaskIMURead(void *pvParameters) {
-    // 100Hz loop rate
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        // Read the sensor and update the global struct
         IMU_Read(currentIMU);
-        
-        // Block this task precisely until the next 10ms interval
+        UpdateFilteredIMUData();
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskBarometerRead(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(BARO_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        Barometer_Read(baro_data);
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskGPSRead(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(GPS_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        if (GPS_Read(gps_data)) {
+            if (gps_data.lock_acquired) {
+                navigation.update(gps_data.latitude, gps_data.longitude, gps_data.altitude);
+            }
+        }
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskFlightControl(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(FLIGHT_CONTROL_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        rx_read();
+
+        const FlightMode desired_mode = DetermineFlightMode();
+        if (!g_flight_mode_initialized || desired_mode != active_flight_mode) {
+            active_flight_mode = desired_mode;
+            InitializeFlightMode(active_flight_mode);
+            g_flight_mode_initialized = true;
+        }
+
+        RunFlightMode(active_flight_mode);
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskTelemetryTx(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        const telemetrydata snapshot = BuildTelemetrySnapshot();
+        (void)telemetry_send(snapshot);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
@@ -36,27 +219,75 @@ void setup() {
     Serial.begin(115200);
     while (!Serial); 
     
+    pwm_init();
+    motormixer_init();
+    rx_init();
     IMU_Init();
+    Barometer_Init();
+    GPS_Init();
+    navigation.restart_mission();
+
     if (!lora_init()) {
         Serial.println("LoRa init failed.");
     }
 
-    // Create the FreeRTOS Task
     xTaskCreatePinnedToCore(
-        TaskIMURead,   // Function to implement the task
-        "IMU_Task",    // Name of the task
-        2048,          // Stack size in words
-        NULL,          // Task input parameter
-        1,             // Priority (1 is high)
-        NULL,          // Task handle
-        1              // Pin to Core 1
+        TaskIMURead,
+        "IMU_Task",
+        2048,
+        NULL,
+        1,
+        NULL,
+        1
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskBarometerRead,
+        "Baro_Task",
+        BARO_TASK_STACK_SIZE,
+        NULL,
+        BARO_TASK_PRIORITY,
+        NULL,
+        BARO_TASK_CORE
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskGPSRead,            // Function to implement the task
+        "GPS_Task",             // Name of the task
+        GPS_TASK_STACK_SIZE,    // Stack size in words
+        NULL,                   // Task input parameter
+        GPS_TASK_PRIORITY,      // Priority
+        NULL,                   // Task handle
+        GPS_TASK_CORE           // Pin to Core 1
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskFlightControl,
+        "FlightCtrl_Task",
+        FLIGHT_CONTROL_TASK_STACK_SIZE,
+        NULL,
+        FLIGHT_CONTROL_TASK_PRIORITY,
+        NULL,
+        FLIGHT_CONTROL_TASK_CORE
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskTelemetryTx,
+        "Telemetry_Task",
+        TELEMETRY_TASK_STACK_SIZE,
+        NULL,
+        TELEMETRY_TASK_PRIORITY,
+        NULL,
+        TELEMETRY_TASK_CORE
     );
 }
 
 void loop() {
     // Core 0 handles the default loop(). We will just use it to print data.
-    
-    
-    Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+
+    if (IMU_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+    }
+
     delay(50); 
 }
