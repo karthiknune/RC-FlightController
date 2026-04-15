@@ -5,6 +5,27 @@
 
 ///pin definintions
 
+
+// LoRa-------------
+
+// LoRa SPI pins
+constexpr int SCK_PIN = 5;
+constexpr int MOSI_PIN = 19;
+constexpr int MISO_PIN = 21;
+// LoRa control pins
+constexpr int CS_PIN = 27;
+constexpr int RST_PIN = 32;
+constexpr int IRQ_PIN = 14;
+// LoRa parameters
+constexpr long LORA_FREQ = 915000000L;
+constexpr uint8_t SYNC_WORD = 0xF3;
+
+// LoRa-------------
+
+// GPS-------------
+// GPS-------------
+
+
 ///Motor and servo pins
 
 #define esc_pin 0
