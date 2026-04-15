@@ -39,7 +39,8 @@ extern PIDController pitch_pid;
 extern PIDController altitude_pid;
 //extern PIDController yaw_pid;
 
-extern IMUData_raw currentIMU;
+extern IMUData_filtered imu_data;
+extern BarometerData baro_data;
 extern GPSData gps_data;
 
 void mode_waypoint_init() {
@@ -55,9 +56,9 @@ void mode_waypoint_run(){
 
     if (navigation.mission_completed() || !gps_data.lock_acquired) {
         const float level_roll_output =
-            roll_pid.compute(0.0f, currentIMU.roll, WAYPOINT_CONTROL_DT_SECONDS);
+            roll_pid.compute(0.0f, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
         const float level_pitch_output =
-            pitch_pid.compute(0.0f, currentIMU.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+            pitch_pid.compute(0.0f, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
         motormixer_compute(throttle_output, level_roll_output, level_pitch_output, 0.0f);
         return;
     }
@@ -65,7 +66,7 @@ void mode_waypoint_run(){
     const float target_heading = navigation.get_target_heading();
     const float target_altitude = navigation.get_target_altitude();
     const float actual_heading = gps_data.heading;
-    const float actual_altitude = gps_data.altitude;
+    const float actual_altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
 
     float desired_roll = 0.0f;
     if (gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
@@ -79,9 +80,9 @@ void mode_waypoint_run(){
     desired_pitch = clamp_value(desired_pitch, -max_pitch_angle, max_pitch_angle);
 
     const float roll_output =
-        roll_pid.compute(desired_roll, currentIMU.roll, WAYPOINT_CONTROL_DT_SECONDS);
+        roll_pid.compute(desired_roll, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
     const float pitch_output =
-        pitch_pid.compute(desired_pitch, currentIMU.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+        pitch_pid.compute(desired_pitch, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
 
     motormixer_compute(throttle_output, roll_output, pitch_output, 0.0f);
 }

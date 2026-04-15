@@ -5,6 +5,7 @@
 float raw_aileron_pwm = 1500;
 float raw_elevator_pwm = 1500;
 float raw_throttle_pwm = 1000;
+float raw_flightmode_pwm = 1900;
 
 
 void rx_init() {
@@ -17,7 +18,7 @@ void rx_read() {
     ///kens code(placeholder for reading raw pwm values from the rx)
 
 
-    ////return raw_aileron_pwm, raw_elevator_pwm, raw_throttle_pwm
+    ////return raw_aileron_pwm, raw_elevator_pwm, raw_throttle_pwm, raw_flightmode_pwm
 }
 
 float rx_to_angle(float raw_pwm, float max_angle){
@@ -58,5 +59,9 @@ float get_des_pitch() {
 float get_des_throttle(){
     float des_throttle = rx_to_throttle(raw_throttle_pwm);
     return des_throttle;
+}
+
+float get_flight_mode_pwm() {
+    return raw_flightmode_pwm;
 }
 

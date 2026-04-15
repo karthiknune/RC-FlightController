@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "datatypes.h"
+#include "flight/flightmodes.h"
 
 ///pin definintions
 
@@ -44,6 +45,22 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 //IMU-------------
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 //IMU-------------
+
+// Control-------------
+constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Waypoint;
+constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;
+constexpr float FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0f;
+constexpr float FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0f;
+constexpr float FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0f;
+constexpr int BARO_TASK_PERIOD_MS = 50;
+constexpr int BARO_TASK_STACK_SIZE = 4096;
+constexpr int BARO_TASK_PRIORITY = 1;
+constexpr int BARO_TASK_CORE = 1;
+constexpr int FLIGHT_CONTROL_TASK_PERIOD_MS = 100;
+constexpr int FLIGHT_CONTROL_TASK_STACK_SIZE = 4096;
+constexpr int FLIGHT_CONTROL_TASK_PRIORITY = 1;
+constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
+// Control-------------
 
 
 ///Motor and servo pins

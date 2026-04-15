@@ -16,7 +16,7 @@ extern PIDController roll_pid;
 extern PIDController pitch_pid;
 extern PIDController altitude_pid;
 
-void mode_althold_init() {
+void mode_alt_hold_init() {
     roll_pid.PIDreset();
     pitch_pid.PIDreset(); 
     altitude_pid.PIDreset();    
@@ -24,7 +24,7 @@ void mode_althold_init() {
     target_altitude = baro_data.altitude; //set target altitude to current altitude when mode is activated
 }
 
-void mode_althold_run(){
+void mode_alt_hold_run(){
     float actual_roll = imu_data.roll;
     float actual_pitch = imu_data.pitch;
     float des_throttle = get_des_throttle();
