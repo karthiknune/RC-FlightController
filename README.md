@@ -361,4 +361,7 @@ Known limitations:
 ## [next steps/TODO]
 - finish the Spektrum RX backend and validate live RC mode switching
 - add yaw coordination or rudder mixing for cleaner turns
+-  seperate imu_yaw and gps_heading
+- change roll control
+- sd card
 
