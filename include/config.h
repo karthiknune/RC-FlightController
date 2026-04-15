@@ -19,6 +19,61 @@ const int aileron_channel = 1;
 const int elevator_channel = 2;    
 const int rudder_channel = 3;
 
+
+// ============================================================
+// IMU hardware settings
+
+const int imu_sda_pin = 22;
+const int imu_scl_pin = 20;
+const uint32_t imu_i2c_freq_hz = 400000;
+
+// IMU sensor configuration
+
+const int imu_accel_fs_g = 4;
+const int imu_gyro_fs_dps = 250;
+const float imu_accel_rate_hz = 125.0f;
+const float imu_gyro_rate_hz = 100.0f;
+const uint8_t imu_accel_dlpf_mode = 5;
+const uint8_t imu_gyro_dlpf_mode = 5;
+
+// IMU calibration constants in AIRCRAFT BODY FRAME
+
+// accel bias
+const float ax_bias_g = 0.0f;
+const float ay_bias_g = 0.0f;
+const float az_bias_g = 0.0f;
+
+// gyro bias
+const float gx_bias_dps = 0.0f;
+const float gy_bias_dps = 0.0f;
+const float gz_bias_dps = 0.0f;
+
+// mag bias
+const float mx_bias_uT = 0.0f;
+const float my_bias_uT = 0.0f;
+const float mz_bias_uT = 0.0f;
+
+// accel scale
+const float ax_scale = 1.0f;
+const float ay_scale = 1.0f;
+const float az_scale = 1.0f;
+
+// gyro scale
+const float gx_scale = 1.0f;
+const float gy_scale = 1.0f;
+const float gz_scale = 1.0f;
+
+// mag scale
+const float mx_scale = 1.0f;
+const float my_scale = 1.0f;
+const float mz_scale = 1.0f;
+
+// AHRS complementary filter tuning
+
+const float roll_pitch_alpha = 0.98f;
+const float yaw_alpha = 0.97f;
+
+
 ///tuning parameters
 const float roll_kp = 1.0f;
 const float roll_ki = 0.0f;
