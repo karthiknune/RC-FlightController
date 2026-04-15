@@ -21,7 +21,7 @@ class Navigation{
         int current_waypoint_index;
         
         //intitiates
-        bool mission_completed =false;
+        bool mission_complete = false;
         float target_heading = 0.0f;
         float target_distance = 0.0f;
         

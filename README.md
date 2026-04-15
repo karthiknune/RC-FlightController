@@ -1,1 +1,1 @@
-Flight Controller OSftware based on ESP32 Feather v2 running FreeRTOS
+Flight Controller software based on ESP32 Feather v2 running FreeRTOS

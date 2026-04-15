@@ -14,7 +14,19 @@ struct IMUData_filtered{
     float yaw;
 };
 
+struct GPSLocalTime {
+    int hour;
+    int minute;
+    int second;
+    bool valid;
+};
 
+struct GPSRawCoordinates {
+    char latitude[16];
+    char latitude_dir;
+    char longitude[16];
+    char longitude_dir;
+};
 
 struct GPSData {
     double latitude;
@@ -23,6 +35,10 @@ struct GPSData {
     float speed;
     float heading;
     int satellites;
+    int fix_quality;
+    GPSLocalTime local_time;
+    GPSRawCoordinates raw_coordinates;
+    bool lock_acquired;
     bool healthy; 
 };
 
