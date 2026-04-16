@@ -27,8 +27,9 @@ void rx_read() {
     
     ///kens code(placeholder for reading raw pwm values from the rx)
 
+    //    task should be added to main.cpp as well
 
-    ////return raw_aileron_pwm, raw_elevator_pwm, raw_throttle_pwm, raw_flightmode_pwm
+    ////return  rc_data.aileron_pwm,  rc_data.elevator_pwm,  rc_data.throttle_pwm,  rc_data.rudder_pwm, rc_data.flightmode_pwm, rc_data.healthy
 }
 
 float rx_to_angle(float raw_pwm, float max_angle){
