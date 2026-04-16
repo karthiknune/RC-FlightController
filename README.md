@@ -17,13 +17,13 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Area | Status | Notes |
 | --- | --- | --- |
 | Board support | Implemented | `adafruit_feather_esp32_v2` via PlatformIO |
-| IMU | Implemented | MPU6050 over I2C, complementary filter for roll/pitch |
+| IMU | Implemented | ICM-20948 over shared I2C, complementary filter for roll/pitch, gyro and level calibration helpers |
 | Barometer | Implemented | BMP3XX over I2C |
 | GPS | Implemented | UART2 parser for GGA and RMC sentences |
 | Waypoint navigation | Implemented | Haversine distance, bearing, leg and mission progress |
 | Flight scheduler | Implemented | FreeRTOS tasks plus mode dispatcher |
 | LoRa telemetry TX | Implemented | Raw binary telemetry packet sent periodically |
-| LoRa telemetry RX | Low-level driver only | No command protocol yet |
+| LoRa telemetry RX | Reference receiver sketch available | Arduino IDE receiver sketch provided for ESP32-WROOM DevKit under `test/arduino_lora_receiver` |
 | Manual / Stabilize / AltHold / Glide / Waypoint modes | Implemented | Runtime-selectable by RC mode PWM mapping |
 | Spektrum receiver backend | Placeholder | Mode selection logic exists, but `rx_read()` is still stubbed |
 | Airspeed sensor | Placeholder | Source file exists but not implemented |
@@ -54,11 +54,18 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 
 | Subsystem | Interface | Pins | Notes |
 | --- | --- | --- | --- |
-| IMU (MPU6050) | I2C | `SDA=22`, `SCL=20` | Uses board-default `Wire.begin()` pins for Adafruit Feather ESP32 V2 |
-| Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same I2C bus as the IMU |
+| IMU (ICM-20948) | I2C | `SDA=22`, `SCL=20` | Shared sensor bus, explicit `Wire.begin(22, 20)` and `400 kHz` bus clock |
+| Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same mutex-protected sensor bus as the IMU |
 | GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
 | LoRa control | GPIO | `CS=27`, `RST=32`, `IRQ=14` | IRQ pin is wired, RX callback mode is not yet used in firmware |
+
+The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
+
+- initializes `Wire` on `SDA=22`, `SCL=20`
+- sets the bus clock to `400000 Hz`
+- guards IMU and barometer access with a FreeRTOS mutex
+- lets both sensor drivers retry initialization if a device is temporarily missing
 
 ### PWM Output Pins
 
@@ -91,7 +98,7 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 
 | Task | Period | Purpose |
 | --- | --- | --- |
-| `TaskIMURead` | `10 ms` | Reads MPU6050 and updates filtered roll/pitch |
+| `TaskIMURead` | `10 ms` | Reads ICM-20948 and updates filtered roll/pitch |
 | `TaskBarometerRead` | `50 ms` | Reads barometer pressure and altitude |
 | `TaskGPSRead` | `50 ms` | Parses incoming GPS NMEA stream and updates navigation |
 | `TaskFlightControl` | `100 ms` | Reads RC input, selects flight mode, runs active mode |
@@ -112,18 +119,26 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 
 Current IMU driver:
 
-- Sensor: MPU6050
-- Bus: I2C
+- Sensor: ICM-20948
+- Bus: shared I2C via `sensor_bus`
 - Accelerometer range: `8G`
 - Gyro range: `500 deg/s`
-- Filter bandwidth: `21 Hz`
+- Magnetometer data rate: `50 Hz`
+- Body-frame transform signs configurable in `include/config.h`
 
 Roll and pitch are computed with a complementary filter:
 
 - short-term motion from gyro
 - long-term gravity reference from accelerometer
 
-Current yaw is not coming from a magnetometer or AHRS fusion stack. The filtered `imu_data.yaw` is currently updated from GPS course when a valid GPS lock and enough ground speed are available.
+The IMU path also now includes:
+
+- magnetometer reads stored in `IMUData_raw`
+- gyro bias calibration via `IMU_Calibrate_Gyro()`
+- level calibration helper via `IMU_Run_Level_Calibration(...)`
+- startup calibration flags in `include/config.h`, disabled by default
+
+Current yaw is still not coming from tilt-compensated magnetometer fusion or an AHRS yaw estimator. The IMU currently provides roll and pitch only. The filtered `imu_data.yaw` is updated from `gps_data.heading` when a valid GPS lock exists and the aircraft is moving faster than `WAYPOINT_MIN_GROUND_SPEED_MPS`. If that GPS condition is not met, yaw is not recomputed from the IMU and simply retains its previous value.
 
 ### Barometer
 
@@ -131,9 +146,9 @@ Current barometer driver:
 
 - Sensor family: BMP3XX
 - Bus: I2C
-- Output altitude from `bmp.readAltitude(...)`
+- Output altitude from measured pressure using `SEALEVELPRESSURE_HPA`
 
-The sea-level reference pressure is currently hard-coded in [`src/hal/sensors/baro.cpp`](src/hal/sensors/baro.cpp), so altitude accuracy depends on adjusting that value to local conditions.
+The sea-level reference pressure now lives in [`include/config.h`](include/config.h), so altitude accuracy depends on adjusting `SEALEVELPRESSURE_HPA` to local conditions.
 
 ### GPS
 
@@ -171,7 +186,7 @@ The mode selector is defined in [`src/main.cpp`](src/main.cpp) and mapped from t
 
 If the PWM value is invalid, the firmware falls back to:
 
-- `DEFAULT_FLIGHT_MODE = FlightMode::Waypoint`
+- `DEFAULT_FLIGHT_MODE = FlightMode::Manual`
 
 ### Mode Summary
 
@@ -234,6 +249,8 @@ Current radio configuration:
 - Sync word: `0xF3`
 - Spreading factor: `7`
 
+`115200` is only the USB serial monitor speed. It is not the LoRa over-the-air data rate.
+
 ### Telemetry Transport
 
 Telemetry is sent every `500 ms` from the telemetry task.
@@ -242,9 +259,10 @@ The current telemetry implementation:
 
 - sends a raw in-memory `telemetrydata` struct
 - uses a single LoRa packet per snapshot
-- does not add framing, versioning, or serialization beyond the packed C++ layout
+- currently sends `128` bytes per packet on ESP32
+- does not add framing, versioning, checksums, or serialization beyond the native C++ layout
 
-That means the ground station must decode the exact same struct layout to interpret packets correctly.
+That means the ground station must decode the exact same field order and 32-bit `float` / `int` layout to interpret packets correctly.
 
 ### Telemetry Contents
 
@@ -254,17 +272,53 @@ The telemetry packet currently includes:
 - GPS position, altitude, speed, heading, satellites, fix quality, lock state
 - barometric altitude
 - current flight mode
-- waypoint target and mission status:
-  - active waypoint index
-  - total waypoint count
-  - distance to waypoint
-  - desired heading
-  - target lat / lon / altitude
-  - leg progress percent
-  - mission progress percent
-  - mission complete flag
+- waypoint target and mission status
+- active waypoint index
+- total waypoint count
+- distance to waypoint
+- desired heading
+- target lat / lon / altitude
+- leg progress percent
+- mission progress percent
+- mission complete flag
+
+Not every field in `telemetrydata` is populated yet. In the current sender, the key populated values are attitude, altitude, GPS state, flight mode, and waypoint status. Fields such as desired control commands, airspeed, and failsafe status are still effectively placeholders.
+
+## Receiver (ESP32-WROOM DevKit)
+
+A ready-to-flash Arduino IDE receiver sketch is included at [`test/arduino_lora_receiver/arduino_lora_receiver.ino`](test/arduino_lora_receiver/arduino_lora_receiver.ino).
+
+Default ESP32-WROOM DevKit receiver wiring in that sketch:
+
+| Receiver signal | ESP32-WROOM DevKit pin |
+| --- | --- |
+| `SCK` | `18` |
+| `MISO` | `19` |
+| `MOSI` | `23` |
+| `CS / NSS` | `5` |
+| `RST` | `14` |
+| `IRQ / DIO0` | `2` |
+
+The receiver sketch expects:
+
+- `915 MHz`
+- sync word `0xF3`
+- spreading factor `7`
+- payload size `128 bytes`
+- serial monitor speed `115200`
+
+What it does:
+
+- receives the Feather's raw binary telemetry packet
+- verifies packet length before decoding
+- prints decoded attitude, altitude, GPS, and waypoint values
+- prints a hex dump if the packet size does not match the expected layout
+
+If your LoRa module is wired differently on the ESP32-WROOM DevKit, change the pin constants at the top of the sketch before flashing.
 
 ## Receiver and RC Input
+
+This section is about flight-control RC input, not the LoRa telemetry receiver described above.
 
 The firmware already has the following logic:
 
@@ -297,6 +351,9 @@ src/
   hal/comms/            LoRa and receiver interface
   hal/actuators/        PWM outputs
   nav/waypoint.cpp      Mission navigation math
+
+test/
+  arduino_lora_receiver/ Arduino IDE LoRa receiver for ESP32-WROOM DevKit
 ```
 
 ## Build, Upload, and Monitor
@@ -326,6 +383,7 @@ Most tuning happens in [`include/config.h`](include/config.h).
 Key groups:
 
 - pin assignments
+- I2C bus pins and frequency
 - task periods and stack sizes
 - PID gains and limits
 - default flight mode
@@ -333,6 +391,7 @@ Key groups:
 - waypoint mission list
 - GPS timezone offset
 - LoRa settings
+- IMU body-frame signs, level offsets, and calibration flags
 
 ## Current Limitations
 
@@ -345,24 +404,25 @@ Known limitations:
 - failsafe logic is incomplete
 - telemetry RX command protocol is not implemented yet
 - telemetry uses raw binary struct layout instead of a stable serialized protocol
+- magnetometer data is read but not yet fused into yaw estimation
 - yaw control is not actively used in waypoint steering
 - no persistent configuration or parameter storage yet
 
 
 ## Quick Start Checklist
 
-1. Wire the Feather ESP32 V2, MPU6050, BMP3XX, GPS, LoRa radio, ESC, and servos according to the tables above.
-2. Update `missionwaypoints[]` in `include/config.h`.
-3. Adjust sea-level pressure in `src/hal/sensors/baro.cpp` for your location.
-4. Build with `pio run`.
-5. Upload and monitor at `115200`.
-6. Verify GPS lock, IMU startup, and LoRa telemetry before attempting closed-loop flight.
+1. Wire the Feather ESP32 V2, ICM-20948, BMP3XX, GPS, LoRa radio, ESC, and servos according to the tables above.
+2. If you want a simple ground receiver, flash [`test/arduino_lora_receiver/arduino_lora_receiver.ino`](test/arduino_lora_receiver/arduino_lora_receiver.ino) to the ESP32-WROOM DevKit and wire its LoRa module to `SCK=18`, `MISO=19`, `MOSI=23`, `CS=5`, `RST=14`, `IRQ=2`.
+3. Update `missionwaypoints[]` in `include/config.h`.
+4. Adjust `SEALEVELPRESSURE_HPA`, IMU signs, and any IMU calibration offsets in `include/config.h` for your airframe and location.
+5. Build with `pio run`.
+6. Upload and monitor at `115200`.
+7. Verify ICM-20948 startup, barometer readings, GPS lock, and LoRa telemetry before attempting closed-loop flight.
 
 ## [next steps/TODO]
 - finish the Spektrum RX backend and validate live RC mode switching
 - add yaw coordination or rudder mixing for cleaner turns
--  seperate imu_yaw and gps_heading
-- change roll control
+- seperate imu_yaw and gps_heading
 - sd card
-- lets make the level_pitch_output target to 2-3 degrees. 0 in some planes will not generate any lift
+
 
