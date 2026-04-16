@@ -39,7 +39,7 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
 //IMU-------------
@@ -48,12 +48,32 @@ constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
 constexpr int IMU_TASK_CORE = 1;
+constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;      // Matches Mukund's ICM-20948 mounting
+constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
+constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
+constexpr float IMU_MAG_OFFSET_X = 0.0f;
+constexpr float IMU_MAG_OFFSET_Y = 0.0f;
+constexpr float IMU_MAG_OFFSET_Z = 0.0f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
+constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
+constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
+constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
+constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 //IMU-------------
 
 //Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = true;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
 //Barometer-------------
+
+// I2C-------------
+constexpr int I2C_SDA_PIN = 22;
+constexpr int I2C_SCL_PIN = 20;
+constexpr uint32_t I2C_BUS_FREQUENCY_HZ = 400000UL;
+// I2C-------------
 
 // Sensor bus / recovery-------------
 constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 20;

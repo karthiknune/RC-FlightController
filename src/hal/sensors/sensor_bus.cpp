@@ -21,7 +21,8 @@ bool SensorBus_Init() {
     }
 
     if (!g_sensor_bus_initialized) {
-        Wire.begin();
+        Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+        Wire.setClock(I2C_BUS_FREQUENCY_HZ);
         Wire.setTimeOut(SENSOR_I2C_TIMEOUT_MS);
         g_sensor_bus_initialized = true;
     }

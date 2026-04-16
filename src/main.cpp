@@ -30,13 +30,25 @@ namespace {
 
 bool g_flight_mode_initialized = false;
 
+void RunStartupIMUCalibrationIfEnabled() {
+    if (IMU_RUN_STARTUP_GYRO_CALIBRATION) {
+        (void)IMU_Calibrate_Gyro();
+    }
+
+    if (IMU_RUN_STARTUP_LEVEL_CALIBRATION) {
+        float roll_offset_deg = 0.0f;
+        float pitch_offset_deg = 0.0f;
+        (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
+    }
+}
+
 void UpdateFilteredIMUData() {
     if (currentIMU.healthy) {
         imu_data.roll = currentIMU.roll;
         imu_data.pitch = currentIMU.pitch;
     }
 
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    //  this needs to change for new ICM sensor, which has a built in compass
+    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    // GPS still provides the best heading until tilt-compensated mag fusion is added
         imu_data.yaw = gps_data.heading;
     }
 }
@@ -239,6 +251,7 @@ void setup() {
     motormixer_init();
     rx_init();
     IMU_Init();
+    RunStartupIMUCalibrationIfEnabled();
     Barometer_Init();
     GPS_Init();
     navigation.restart_mission();
