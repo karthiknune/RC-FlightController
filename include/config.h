@@ -47,7 +47,7 @@ constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 //IMU-------------
 
 // Control-------------
-constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Waypoint;
+constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
 constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;
 constexpr float FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0f;
 constexpr float FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0f;
@@ -65,10 +65,10 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 ///Motor and servo pins
 
-#define esc_pin 0
-#define aileron_pin 1
-#define elevator_pin 2
-#define rudder_pin 3
+#define esc_pin 13
+#define aileron_pin 12
+#define elevator_pin 33
+#define rudder_pin 15
 
 //channels
 

@@ -64,10 +64,10 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 
 | Output | GPIO | PWM channel | Purpose |
 | --- | --- | --- | --- |
-| ESC | `0` | `0` | Throttle output |
-| Aileron servo | `1` | `1` | Roll control |
-| Elevator servo | `2` | `2` | Pitch control |
-| Rudder servo | `3` | `3` | Yaw / rudder control |
+| ESC | `13` | `0` | Throttle output |
+| Aileron servo | `12` | `1` | Roll control |
+| Elevator servo | `33` | `2` | Pitch control |
+| Rudder servo | `15` | `3` | Yaw / rudder control |
 
 ### PWM Operating Mode
 
