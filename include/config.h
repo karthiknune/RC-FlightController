@@ -44,12 +44,23 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 
 //IMU-------------
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
+constexpr int IMU_TASK_PERIOD_MS = 10;
+constexpr int IMU_TASK_STACK_SIZE = 4096;
+constexpr int IMU_TASK_PRIORITY = 1;
+constexpr int IMU_TASK_CORE = 1;
 //IMU-------------
 
 //Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = true;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
 //Barometer-------------
+
+// Sensor bus / recovery-------------
+constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 20;
+constexpr int SENSOR_I2C_LOCK_TIMEOUT_MS = 20;
+constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
+constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
+// Sensor bus / recovery-------------
 
 
 // Control-------------
