@@ -54,9 +54,9 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 
 | Subsystem | Interface | Pins | Notes |
 | --- | --- | --- | --- |
-| IMU (MPU6050) | I2C | `SDA=22`, `SCL=20` | Uses board-default `Wire.begin()` pins for Adafruit Feather ESP32 V2 |
-| Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same I2C bus as the IMU |
-| GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
+| IMU (MPU6050) | I2C | `SDA=22`, `SCL=20` | Uses the shared `Wire` bus at `400 kHz` |
+| Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same I2C bus as the IMU, protected by a mutex in firmware |
+| GPS | UART2 | `TX=8`, `RX=7` | Matches the Feather ESP32 V2 `TX` / `RX` pins and runs at `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
 | LoRa control | GPIO | `CS=27`, `RST=32`, `IRQ=14` | IRQ pin is wired, RX callback mode is not yet used in firmware |
 
@@ -64,10 +64,12 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 
 | Output | GPIO | PWM channel | Purpose |
 | --- | --- | --- | --- |
-| ESC | `0` | `0` | Throttle output |
-| Aileron servo | `1` | `1` | Roll control |
-| Elevator servo | `2` | `2` | Pitch control |
-| Rudder servo | `3` | `3` | Yaw / rudder control |
+| ESC | `26` | `0` | Throttle output |
+| Aileron servo | `25` | `1` | Roll control |
+| Elevator servo | `4` | `2` | Pitch control |
+| Rudder servo | `33` | `3` | Yaw / rudder control |
+
+These outputs were moved off the older `0/1/2/3` mapping so the full stack can run without clobbering the USB serial console during debug.
 
 ### PWM Operating Mode
 
@@ -114,6 +116,8 @@ Current IMU driver:
 
 - Sensor: MPU6050
 - Bus: I2C
+- Pins: `SDA=22`, `SCL=20`
+- Bus speed: `400 kHz`
 - Accelerometer range: `8G`
 - Gyro range: `500 deg/s`
 - Filter bandwidth: `21 Hz`
@@ -131,7 +135,9 @@ Current barometer driver:
 
 - Sensor family: BMP3XX
 - Bus: I2C
-- Output altitude from `bmp.readAltitude(...)`
+- Pins: `SDA=22`, `SCL=20`
+- Reads are serialized with the IMU on the shared I2C bus
+- Altitude is computed from the sampled pressure using the configured sea-level reference
 
 The sea-level reference pressure is currently hard-coded in [`src/hal/sensors/baro.cpp`](src/hal/sensors/baro.cpp), so altitude accuracy depends on adjusting that value to local conditions.
 

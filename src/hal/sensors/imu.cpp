@@ -1,18 +1,33 @@
 ///////temp using MPU6050
 
 #include "hal/sensors/imu.h"
+#include "hal/sensors/i2c_bus.h"
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+
+#include "config.h"
 
 
 Adafruit_MPU6050 mpu;
 unsigned long lastTime = 0;
 
 void IMU_Init() {
-    Wire.begin(); // Uses default SDA/SCL pins for ESP32 Feather V2
-    
-    if (!mpu.begin()) {
+    i2c_bus_init();
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    Wire.setClock(I2C_BUS_FREQUENCY_HZ);
+
+    if (!i2c_bus_lock()) {
+        Serial.println("Failed to lock I2C bus for IMU init");
+        while (1) {
+            delay(10);
+        }
+    }
+
+    const bool imu_ready = mpu.begin();
+    i2c_bus_unlock();
+
+    if (!imu_ready) {
         Serial.println("Failed to find MPU6050 chip");
         while (1) {
             delay(10); // Halt execution if IMU isn't found
@@ -30,7 +45,13 @@ void IMU_Init() {
 
 void IMU_Read(IMUData_raw &data) {
     sensors_event_t a, g, temp;
+    if (!i2c_bus_lock()) {
+        data.healthy = false;
+        return;
+    }
+
     mpu.getEvent(&a, &g, &temp);
+    i2c_bus_unlock();
 
     // 1. Read Raw Data
     data.accel_x = a.acceleration.x;

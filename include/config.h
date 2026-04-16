@@ -46,6 +46,12 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 //IMU-------------
 
+// I2C-------------
+constexpr int I2C_SDA_PIN = 22;
+constexpr int I2C_SCL_PIN = 20;
+constexpr unsigned long I2C_BUS_FREQUENCY_HZ = 400000UL;
+// I2C-------------
+
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Waypoint;
 constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;
@@ -65,10 +71,11 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 ///Motor and servo pins
 
-#define esc_pin 0
-#define aileron_pin 1
-#define elevator_pin 2
-#define rudder_pin 3
+// Feather ESP32 V2 safe PWM outputs for bring-up with USB serial, GPS, LoRa, and I2C sensors enabled.
+constexpr int esc_pin = 26;
+constexpr int aileron_pin = 25;
+constexpr int elevator_pin = 4;
+constexpr int rudder_pin = 33;
 
 //channels
 
