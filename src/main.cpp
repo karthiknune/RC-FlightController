@@ -39,16 +39,13 @@ void UpdateFilteredIMUData() {
 }
 
 FlightMode DetermineFlightMode() {
-    const float flight_mode_pwm = get_flight_mode_pwm();
+    const bool auto_mode = get_auto_mode();
 
-    if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f) {
+    if (!auto_mode) {
         return DEFAULT_FLIGHT_MODE;
     }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX) {
-        return FlightMode::Manual;
-    }
-
+    return FlightMode::Manual;
+/*
     if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX) {
         return FlightMode::Stabilize;
     }
@@ -62,6 +59,7 @@ FlightMode DetermineFlightMode() {
     }
 
     return FlightMode::Waypoint;
+*/
 }
 
 void InitializeFlightMode(FlightMode mode) {
@@ -189,8 +187,6 @@ void TaskFlightControl(void *pvParameters) {
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        rx_read();
-
         const FlightMode desired_mode = DetermineFlightMode();
         if (!g_flight_mode_initialized || desired_mode != active_flight_mode) {
             active_flight_mode = desired_mode;
@@ -217,7 +213,7 @@ void TaskTelemetryTx(void *pvParameters) {
 
 void setup() {
     Serial.begin(115200);
-    while (!Serial); 
+    //while (!Serial); 
     
     pwm_init();
     motormixer_init();
@@ -288,6 +284,11 @@ void loop() {
     if (IMU_DEBUG_OUTPUT_ENABLED) {
         Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
     }
+    if (RX_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f | Throttle: %6.2f\n",
+            get_des_roll(), get_des_pitch(), get_des_yaw(), get_des_throttle());
+    }
+    Serial.printf("I'm alive!");
 
     delay(50); 
 }

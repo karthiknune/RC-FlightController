@@ -4,10 +4,10 @@
 
 
 void motormixer_init(){
-    pwm_write(esc_channel, 1000); 
-    pwm_write(aileron_channel, 1500);
-    pwm_write(elevator_channel, 1500);  
-    pwm_write(rudder_channel, 1500);
+    setThrottle(1000);
+    setAileron(1500);
+    setElevator(1500);
+    setRudder(1500);
 }
 
 void motormixer_compute(float throttle_pid, float roll_pid, float pitch_pid, float yaw_pid){
@@ -25,9 +25,8 @@ void motormixer_compute(float throttle_pid, float roll_pid, float pitch_pid, flo
     rudder_out = std::max(1000, std::min(2000, rudder_out));
 
     // write pwm to motors
-    pwm_write(esc_channel, throttle_out);
-    pwm_write(aileron_channel, aileron_out);
-    pwm_write(elevator_channel, elevator_out);
-    pwm_write(rudder_channel, rudder_out);
-    
+    setThrottle(throttle_out);
+    setAileron(aileron_out);
+    setElevator(elevator_out);
+    setRudder(rudder_out);
 }

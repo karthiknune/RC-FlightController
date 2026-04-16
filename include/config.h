@@ -64,11 +64,50 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 
 ///Motor and servo pins
+#define esc_pin 13
+#define aileron_pin 0
+#define elevator_pin 27
+#define rudder_pin 14
 
-#define esc_pin 0
-#define aileron_pin 1
-#define elevator_pin 2
-#define rudder_pin 3
+/// Receiver-----------
+constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
+#define NUM_RX_CHANNELS 4
+#define rx_esc_pin  21
+#define rx_elevator_pin 32
+#define rx_rudder_pin 33
+#define rx_mode_pin 15
+
+#define PWM_FREQ 50      // Standard servo frequency in Hz
+#define PWM_RESOLUTION 16 // 16-bit resolution for finer control
+#define SERVO_MIN       950 // Minimum pulse width in microseconds
+
+#define THROTTLE_MIN    1171    // Minimum pulse width for throttle in microseconds
+#define THROTTLE_MAX    2210    // Maximum pulse width for throttle in microseconds
+#define THROTTLE_SLOPE  6.44    // Slope for converting throttle PWM to percentage (100% throttle corresponds to 2210us, 0% corresponds to 1171us)
+#define THROTTLE_INT    1171    // Intercept for throttle conversion (corresponds to 0% throttle at 1171us)
+#define THROTTLE_INIT   585     // "Low Pulse Width" for ESC initialization (in microseconds)
+
+#define RUDDER_MIN      1054    // Minimum pulse width for rudder in microseconds
+#define RUDDER_MAX      2040    // Maximum pulse width for rudder in microseconds
+#define RUDDER_SLOPE    12.32   // Slope for converting rudder PWM to angle (max right corresponds to 2040us, max left corresponds to 1054us)
+#define RUDDER_INT      1547    // Intercept for rudder conversion (corresponds to center position)
+
+#define ELEVATOR_MIN    1074    // Minimum pulse width for elevator in microseconds
+#define ELEVATOR_MAX    1894    // Maximum and minimum pulse widths for elevator in microseconds
+#define ELEVATOR_SLOPE  -32.81  // Slope for converting elevator PWM to angle (max down corresponds to 1894us, max up corresponds to 1074us)
+#define ELEVATOR_INT    1566    // Intercept for elevator conversion (corresponds to center position)
+
+#define AUTO_MODE_THRESHOLD 1500    // PWM threshold above which the flight mode switches from manual to auto
+
+// Pre-calculates the scale to avoid division in the loop
+// 1024 / 20000 simplified is 64 / 1250
+#define US_TO_DUTY(us) ((us * 64) / 1250)
+
+constexpr int RECEIVER_TASK_PERIOD_MS = 100;
+constexpr int RECEIVER_TASK_STACK_SIZE = 4096;
+constexpr int RECEIVER_TASK_PRIORITY = 1;
+constexpr int RECEIVER_TASK_CORE = 1;
+/// Receiver-----------
 
 //channels
 
