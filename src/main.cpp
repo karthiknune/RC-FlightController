@@ -33,10 +33,11 @@ void UpdateFilteredIMUData() {
     imu_data.roll = currentIMU.roll;
     imu_data.pitch = currentIMU.pitch;
 
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
+    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    //  this needs to change for new ICM sensor, which has a built in compass
         imu_data.yaw = gps_data.heading;
     }
 }
+
 
 FlightMode DetermineFlightMode() {
     const float flight_mode_pwm = get_flight_mode_pwm();
@@ -287,6 +288,22 @@ void loop() {
 
     if (IMU_DEBUG_OUTPUT_ENABLED) {
         Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+    }
+
+    if (BARO_DEBUG_OUTPUT_ENABLED) {
+        if (baro_data.healthy) {
+            Serial.printf("Baro Altitude: %6.2f m | Pressure: %7.2f hPa\n", baro_data.altitude, baro_data.pressure);
+        } else {
+            Serial.println("Barometer reading unhealthy");
+        }
+    }
+
+    if (GPS_DEBUG_OUTPUT_ENABLED) {
+        if (gps_data.healthy) {
+            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading);
+        } else {
+            Serial.println("GPS reading unhealthy");
+        }
     }
 
     delay(50); 

@@ -39,16 +39,22 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 //IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 //IMU-------------
+
+//Barometer-------------
+constexpr bool BARO_DEBUG_OUTPUT_ENABLED = true;
+constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
+//Barometer-------------
+
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;
+constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
 constexpr float FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0f;
 constexpr float FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0f;
 constexpr float FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0f;
@@ -74,7 +80,7 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 const int esc_channel = 0;
 const int aileron_channel = 1;
-const int elevator_channel = 2;    
+const int elevator_channel = 2;
 const int rudder_channel = 3;
 
 ///tuning parameters
@@ -116,10 +122,10 @@ constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
 constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
 constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 
-const int num_waypoints = 2;               
+const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {
     
-    {2.0536, 1.2189333333333333333, 100},
+    {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt
     {2, 2, 100},
     
 };

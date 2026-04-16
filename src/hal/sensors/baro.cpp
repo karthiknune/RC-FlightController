@@ -2,8 +2,7 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BMP3XX.h"
 #include "hal/sensors/baro.h"
-
-#define SEALEVELPRESSURE_HPA (1031.2) /// adjust based on local sea level press
+#include "../include/config.h"
 
 Adafruit_BMP3XX bmp;
 
@@ -22,7 +21,6 @@ void Barometer_Init() {
 
 void Barometer_Read(BarometerData &data) {
     if (!bmp.performReading()) {
-        Serial.println("Failed to perform reading :(");
         data.healthy = false;
         return;
     }
