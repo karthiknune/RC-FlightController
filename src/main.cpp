@@ -321,6 +321,7 @@ PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integ
 namespace {
 
 bool g_flight_mode_initialized = false;
+constexpr bool kSensorBringupOnly = true;
 
 void UpdateFilteredIMUData() {
     imu_data.roll = currentIMU.roll;
@@ -517,23 +518,33 @@ void setup() {
         delay(10);
     }
     Serial.println("Booting flight controller...");
-    
-    pwm_init();
-    motormixer_init();
-    rx_init();
+
+    if (!kSensorBringupOnly) {
+        pwm_init();
+        motormixer_init();
+        rx_init();
+    }
+
     IMU_Init();
     Barometer_Init();
     GPS_Init();
 
-    if (!lora_init()) {
-        Serial.println("LoRa init failed.");
+    if (!kSensorBringupOnly) {
+        if (!lora_init()) {
+            Serial.println("LoRa init failed.");
+        }
+    } else {
+        Serial.println("Sensor-only bring-up mode enabled.");
     }
 
     xTaskCreatePinnedToCore(TaskIMURead, "IMU_Task", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(TaskBarometerRead, "Baro_Task", BARO_TASK_STACK_SIZE, NULL, BARO_TASK_PRIORITY, NULL, BARO_TASK_CORE);
     xTaskCreatePinnedToCore(TaskGPSRead, "GPS_Task", GPS_TASK_STACK_SIZE, NULL, GPS_TASK_PRIORITY, NULL, GPS_TASK_CORE);
-    xTaskCreatePinnedToCore(TaskFlightControl, "FlightCtrl_Task", FLIGHT_CONTROL_TASK_STACK_SIZE, NULL, FLIGHT_CONTROL_TASK_PRIORITY, NULL, FLIGHT_CONTROL_TASK_CORE);
-    xTaskCreatePinnedToCore(TaskTelemetryTx, "Telemetry_Task", TELEMETRY_TASK_STACK_SIZE, NULL, TELEMETRY_TASK_PRIORITY, NULL, TELEMETRY_TASK_CORE);
+
+    if (!kSensorBringupOnly) {
+        xTaskCreatePinnedToCore(TaskFlightControl, "FlightCtrl_Task", FLIGHT_CONTROL_TASK_STACK_SIZE, NULL, FLIGHT_CONTROL_TASK_PRIORITY, NULL, FLIGHT_CONTROL_TASK_CORE);
+        xTaskCreatePinnedToCore(TaskTelemetryTx, "Telemetry_Task", TELEMETRY_TASK_STACK_SIZE, NULL, TELEMETRY_TASK_PRIORITY, NULL, TELEMETRY_TASK_CORE);
+    }
 }
 
 void loop() {
