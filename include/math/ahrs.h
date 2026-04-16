@@ -4,15 +4,13 @@
 class AHRS
 {
 private:
-    float raw_accel_x, raw_accel_y, raw_accel_z;
-    float raw_gyro_x, raw_gyro_y, raw_gyro_z;
+    unsigned long last_time;
+    bool is_initialized;
 
-    void read_imu();
-    void compute_attitude();
 public:
-     AHRS();//constructor
+    AHRS();
+    void init();
 
-     void init();
-     void ahrs_update();
-
+    // Takes the raw hardware data, performs the filter, and updates the filtered struct
+    void update(const IMUData_raw &raw_data, IMUData_filtered &filtered_data);
 };

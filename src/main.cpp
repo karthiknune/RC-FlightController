@@ -217,8 +217,8 @@
 
 // void setup() {
 //     Serial.begin(115200);
-//     while (!Serial); 
-    
+//     while (!Serial);
+
 //     pwm_init();
 //     motormixer_init();
 //     rx_init();
@@ -289,7 +289,7 @@
 //         Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
 //     }
 
-//     delay(50); 
+//     delay(50);
 // }
 #include <Arduino.h>
 #include "datatypes.h"
@@ -305,12 +305,15 @@
 #include "hal/actuators/pwm_out.h"
 #include "flight/telemetry.h"
 #include "nav/waypoint.h"
+#include "math/ahrs.h"
 
-IMUData_raw currentIMU; 
+IMUData_raw currentIMU;
 IMUData_filtered imu_data = {};
 BarometerData baro_data = {};
-GPSData gps_data = {};  
+GPSData gps_data = {};
 FlightMode active_flight_mode = DEFAULT_FLIGHT_MODE;
+AHRS ahrs;
+void Run_Level_Calibration();
 
 // PID Initializations
 PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_integral);
@@ -318,48 +321,59 @@ PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitc
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
 PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
 
-namespace {
+namespace
+{
 
-bool g_flight_mode_initialized = false;
+    bool g_flight_mode_initialized = false;
 
-void UpdateFilteredIMUData() {
-    imu_data.roll = currentIMU.roll;
-    imu_data.pitch = currentIMU.pitch;
+    // void UpdateFilteredIMUData()
+    // {
+    //     imu_data.roll = currentIMU.roll;
+    //     imu_data.pitch = currentIMU.pitch;
 
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
-        imu_data.yaw = gps_data.heading;
+    //     if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS)
+    //     {
+    //         imu_data.yaw = gps_data.heading;
+    //     }
+    // }
+
+    FlightMode DetermineFlightMode()
+    {
+        // UPDATED: Using the clean rc_data struct we built for the Spektrum receiver
+        const float flight_mode_pwm = rc_data.flightmode_pwm;
+
+        if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f)
+        {
+            return DEFAULT_FLIGHT_MODE;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX)
+        {
+            return FlightMode::Manual;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX)
+        {
+            return FlightMode::Stabilize;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX)
+        {
+            return FlightMode::AltHold;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX)
+        {
+            return FlightMode::Glide;
+        }
+
+        return FlightMode::Waypoint;
     }
-}
 
-FlightMode DetermineFlightMode() {
-    // UPDATED: Using the clean rc_data struct we built for the Spektrum receiver
-    const float flight_mode_pwm = rc_data.flightmode_pwm;
-
-    if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f) {
-        return DEFAULT_FLIGHT_MODE;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX) {
-        return FlightMode::Manual;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX) {
-        return FlightMode::Stabilize;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
-        return FlightMode::AltHold;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX) {
-        return FlightMode::Glide;
-    }
-
-    return FlightMode::Waypoint;
-}
-
-void InitializeFlightMode(FlightMode mode) {
-    switch (mode) {
+    void InitializeFlightMode(FlightMode mode)
+    {
+        switch (mode)
+        {
         case FlightMode::Manual:
             mode_manual_init();
             break;
@@ -376,11 +390,13 @@ void InitializeFlightMode(FlightMode mode) {
             navigation.restart_mission();
             mode_waypoint_init();
             break;
+        }
     }
-}
 
-void RunFlightMode(FlightMode mode) {
-    switch (mode) {
+    void RunFlightMode(FlightMode mode)
+    {
+        switch (mode)
+        {
         case FlightMode::Manual:
             mode_manual_run();
             break;
@@ -396,12 +412,13 @@ void RunFlightMode(FlightMode mode) {
         case FlightMode::Waypoint:
             mode_waypoint_run();
             break;
+        }
     }
-}
 
 } // namespace
 
-telemetrydata BuildTelemetrySnapshot() {
+telemetrydata BuildTelemetrySnapshot()
+{
     telemetrydata snapshot = {};
 
     snapshot.roll = imu_data.roll;
@@ -428,7 +445,8 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.waypoint_total = navigation.get_total_waypoint_count();
     snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
 
-    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
+    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints)
+    {
         snapshot.waypoint_target_lat = static_cast<float>(missionwaypoints[snapshot.waypoint_index].lat);
         snapshot.waypoint_target_lon = static_cast<float>(missionwaypoints[snapshot.waypoint_index].lon);
     }
@@ -436,37 +454,58 @@ telemetrydata BuildTelemetrySnapshot() {
     return snapshot;
 }
 
-void TaskIMURead(void *pvParameters) {
+void TaskIMURead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = pdMS_TO_TICKS(10);
+    const TickType_t xFrequency = pdMS_TO_TICKS(10); // 100Hz
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    // Start the math timer
+    ahrs.init();
+
+    for (;;)
+    {
+        // 1. Read the hardware
         IMU_Read(currentIMU);
-        UpdateFilteredIMUData();
+
+        // 2. Do the math
+        ahrs.update(currentIMU, imu_data);
+
+        // 3. Optional: Overwrite Yaw with GPS if moving fast enough
+        if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS)
+        {
+            imu_data.yaw = gps_data.heading;
+        }
+
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskBarometerRead(void *pvParameters) {
+void TaskBarometerRead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(BARO_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         Barometer_Read(baro_data);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskGPSRead(void *pvParameters) {
+void TaskGPSRead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(GPS_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
-        if (GPS_Read(gps_data)) {
-            if (gps_data.lock_acquired) {
+    for (;;)
+    {
+        if (GPS_Read(gps_data))
+        {
+            if (gps_data.lock_acquired)
+            {
                 navigation.update(gps_data.latitude, gps_data.longitude, gps_data.altitude);
             }
         }
@@ -474,18 +513,21 @@ void TaskGPSRead(void *pvParameters) {
     }
 }
 
-void TaskFlightControl(void *pvParameters) {
+void TaskFlightControl(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(FLIGHT_CONTROL_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         // 1. Read latest radio commands
         rx_read(); // UPDATED: Changed from rx_read() to match our new contract
 
         // 2. Decide what mode we are in
         const FlightMode desired_mode = DetermineFlightMode();
-        if (!g_flight_mode_initialized || desired_mode != active_flight_mode) {
+        if (!g_flight_mode_initialized || desired_mode != active_flight_mode)
+        {
             active_flight_mode = desired_mode;
             InitializeFlightMode(active_flight_mode);
             g_flight_mode_initialized = true;
@@ -493,27 +535,31 @@ void TaskFlightControl(void *pvParameters) {
 
         // 3. Run the math and write to the mixer
         RunFlightMode(active_flight_mode);
-        
+
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskTelemetryTx(void *pvParameters) {
+void TaskTelemetryTx(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         const telemetrydata snapshot = BuildTelemetrySnapshot();
         (void)telemetry_send(snapshot);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void setup() {
+void setup()
+{
     Serial.begin(115200);
     const unsigned long serial_wait_start = millis();
-    while (!Serial && (millis() - serial_wait_start) < 2000UL) {
+    while (!Serial && (millis() - serial_wait_start) < 2000UL)
+    {
         delay(10);
     }
     Serial.println("Booting flight controller...");
@@ -522,25 +568,51 @@ void setup() {
     motormixer_init();
     rx_init();
     IMU_Init();
+    Run_Level_Calibration();
+    IMU_Calibrate_Gyro();
     Barometer_Init();
     GPS_Init();
 
-    if (!lora_init()) {
+    if (!lora_init())
+    {
         Serial.println("LoRa init failed.");
     }
 
+    // --- NEW: ORIENTATION TESTER BLOCK ---
+    Serial.println("\n--- ORIENTATION CHECK MODE (30 SECONDS) ---");
+    Serial.println("Move aircraft to verify: Front=+X, Right=+Y, Down=+Z");
+
+    unsigned long testStart = millis();
+    while (millis() - testStart < 30000)
+    { // 30 second window
+        IMU_Read(currentIMU);
+        ahrs.update(currentIMU, imu_data);
+
+        // Print raw body-frame accelerations to verify NED gravity
+        Serial.printf("AX:%6.2f AY:%6.2f AZ:%6.2f | R:%6.2f P:%6.2f\n",
+                      currentIMU.accel_x, currentIMU.accel_y, currentIMU.accel_z,
+                      imu_data.roll, imu_data.pitch);
+        delay(100);
+    }
+    Serial.println("--- DIAGNOSTICS COMPLETE. STARTING FLIGHT TASKS ---");
+    // -------------------------------------
+
+    // RTOS tasks for concurrent execution of different subsystems
     xTaskCreatePinnedToCore(TaskIMURead, "IMU_Task", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(TaskBarometerRead, "Baro_Task", BARO_TASK_STACK_SIZE, NULL, BARO_TASK_PRIORITY, NULL, BARO_TASK_CORE);
+    // xTaskCreatePinnedToCore(TaskBarometerRead, "Baro_Task", BARO_TASK_STACK_SIZE, NULL, BARO_TASK_PRIORITY, NULL, BARO_TASK_CORE);
     xTaskCreatePinnedToCore(TaskGPSRead, "GPS_Task", GPS_TASK_STACK_SIZE, NULL, GPS_TASK_PRIORITY, NULL, GPS_TASK_CORE);
     xTaskCreatePinnedToCore(TaskFlightControl, "FlightCtrl_Task", FLIGHT_CONTROL_TASK_STACK_SIZE, NULL, FLIGHT_CONTROL_TASK_PRIORITY, NULL, FLIGHT_CONTROL_TASK_CORE);
     xTaskCreatePinnedToCore(TaskTelemetryTx, "Telemetry_Task", TELEMETRY_TASK_STACK_SIZE, NULL, TELEMETRY_TASK_PRIORITY, NULL, TELEMETRY_TASK_CORE);
 }
 
-void loop() {
+void loop()
+{
     // Core 0 handles the default loop(). We will just use it to print data.
-    if (IMU_DEBUG_OUTPUT_ENABLED) {
-        Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+    if (IMU_DEBUG_OUTPUT_ENABLED)
+    {
+        // CHANGED: currentIMU -> imu_data
+        Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", imu_data.roll, imu_data.pitch);
     }
 
-    delay(50); 
+    delay(50);
 }

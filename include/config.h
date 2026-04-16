@@ -6,8 +6,7 @@
 #include "datatypes.h"
 #include "flight/flightmodes.h"
 
-///pin definintions
-
+/// pin definintions
 
 // LoRa-------------
 // LoRa SPI pins
@@ -32,7 +31,7 @@ constexpr int GPS_UART_NUM = 2;
 constexpr unsigned long GPS_BAUD_RATE = 115200UL;
 constexpr int GPS_TX_PIN = 8;
 constexpr int GPS_RX_PIN = 7;
-constexpr int GPS_TIME_ZONE_OFFSET = -4;    //  UTC-4 for Eastern Daylight Time (EDT)
+constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
 constexpr int GPS_TASK_PERIOD_MS = 50;
 constexpr int GPS_TASK_STACK_SIZE = 4096;
 constexpr int GPS_TASK_PRIORITY = 1;
@@ -42,9 +41,14 @@ constexpr int GPS_MAX_FIELDS = 20;
 constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
-//IMU-------------
+// IMU-------------
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
-//IMU-------------
+constexpr float MAG_OFFSET_X = -18.5f;
+constexpr float MAG_OFFSET_Y = -10.0f;
+constexpr float MAG_OFFSET_Z = -38.5f;
+constexpr float LEVEL_ROLL_OFFSET = 1.50f;
+constexpr float LEVEL_PITCH_OFFSET = -2.20f;
+// IMU-------------
 
 // I2C-------------
 constexpr int I2C_SDA_PIN = 22;
@@ -68,8 +72,7 @@ constexpr int FLIGHT_CONTROL_TASK_PRIORITY = 1;
 constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 // Control-------------
 
-
-///Motor and servo pins
+/// Motor and servo pins
 
 // Feather ESP32 V2 safe PWM outputs for bring-up with USB serial, GPS, LoRa, and I2C sensors enabled.
 constexpr int esc_pin = 26;
@@ -77,14 +80,14 @@ constexpr int aileron_pin = 25;
 constexpr int elevator_pin = 4;
 constexpr int rudder_pin = 33;
 
-//channels
+// channels
 
 const int esc_channel = 0;
 const int aileron_channel = 1;
-const int elevator_channel = 2;    
+const int elevator_channel = 2;
 const int rudder_channel = 3;
 
-///tuning parameters
+/// tuning parameters
 const float roll_kp = 1.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
@@ -103,10 +106,11 @@ const float yaw_kd = 0.1f;
 const float max_yaw_output = 500.0f;
 const float max_yaw_integral = 200.0f;
 
-//Limits
 
-const float max_roll_angle = 45.0f; 
-const float max_pitch_angle = 15.0f; 
+// Limits
+
+const float max_roll_angle = 45.0f;
+const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 /// for althold pid
 const float alt_kp = 1.0f;
@@ -115,19 +119,17 @@ const float alt_kd = 0.1f;
 const float max_alt_output = max_pitch_angle;
 const float max_alt_integral = 10.0f;
 
-
-//waypoints
+// waypoints
 constexpr double NAV_EARTH_RADIUS_METERS = 6371000.0;
 constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
 constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
 constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
 constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 
-const int num_waypoints = 2;               
-const waypoint missionwaypoints[]= {
-    
+const int num_waypoints = 2;
+const waypoint missionwaypoints[] = {
+
     {2.0536, 1.2189333333333333333, 100},
     {2, 2, 100},
-    
-};
 
+};

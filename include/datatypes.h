@@ -1,34 +1,40 @@
 #pragma once
 
-struct IMUData_raw {
+struct IMUData_raw
+{
     float accel_x, accel_y, accel_z;
     float gyro_x, gyro_y, gyro_z;
+    float mag_x, mag_y, mag_z;
     float roll;
     float pitch;
     bool healthy; // True if sensor is connected and reading
 };
 
-struct IMUData_filtered{
+struct IMUData_filtered
+{
     float roll;
     float pitch;
     float yaw;
 };
 
-struct GPSLocalTime {
+struct GPSLocalTime
+{
     int hour;
     int minute;
     int second;
     bool valid;
 };
 
-struct GPSRawCoordinates {
+struct GPSRawCoordinates
+{
     char latitude[16];
     char latitude_dir;
     char longitude[16];
     char longitude_dir;
 };
 
-struct GPSData {
+struct GPSData
+{
     double latitude;
     double longitude;
     float altitude;
@@ -39,33 +45,34 @@ struct GPSData {
     GPSLocalTime local_time;
     GPSRawCoordinates raw_coordinates;
     bool lock_acquired;
-    bool healthy; 
+    bool healthy;
 };
 
-struct BarometerData {
+struct BarometerData
+{
     float pressure;
     float altitude;
-    bool healthy; 
+    bool healthy;
 };
 
-
-struct RCData {
+struct RCData
+{
     float aileron_pwm;
     float elevator_pwm;
     float throttle_pwm;
     float rudder_pwm;
     float flightmode_pwm;
-    bool healthy; 
+    bool healthy;
 };
 
-
-struct telemetrydata{
+struct telemetrydata
+{
     float roll;
     float pitch;
     float throttle;
     float yaw;
     float des_roll;
-    float des_pitch;    
+    float des_pitch;
     float des_throttle;
     float des_yaw;
     float altitude;
@@ -94,9 +101,9 @@ struct telemetrydata{
     int waypoint_mission_complete;
 };
 
-
-struct waypoint{
+struct waypoint
+{
     double lat;
     double lon;
-    float alt;          ///////////////m
+    float alt; ///////////////m
 };
