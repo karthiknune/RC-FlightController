@@ -58,7 +58,7 @@ void mode_waypoint_run(){
         const float level_roll_output =
             roll_pid.compute(0.0f, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
         const float level_pitch_output =
-            pitch_pid.compute(0.0f, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+            pitch_pid.compute(2.0f, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
         motormixer_compute(throttle_output, level_roll_output, level_pitch_output, 0.0f);
         return;
     }

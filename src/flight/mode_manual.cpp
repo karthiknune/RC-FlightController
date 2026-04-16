@@ -5,36 +5,23 @@
 #include "hal/comms/rx_spektrum.h"
 #include "hal/actuators/pwm_out.h"
 #include "flight/motormixer.h"
-
-namespace {
-
-float clamp_value(float value, float minimum, float maximum) {
-    if (value < minimum) {
-        return minimum;
-    }
-
-    if (value > maximum) {
-        return maximum;
-    }
-
-    return value;
-}
-
-} // namespace
+#include "hal/comms/rx_spektrum.h"
 
 void mode_manual_init() {
     
 }
 
 void mode_manual_run(){
-    const float desired_roll = get_des_roll();
-    const float desired_pitch = get_des_pitch();
-    const float desired_throttle = get_des_throttle();
 
-    const float roll_output =
-        clamp_value((desired_roll / max_roll_angle) * max_roll_output, -max_roll_output, max_roll_output);
-    const float pitch_output =
-        clamp_value((desired_pitch / max_pitch_angle) * max_pitch_output, -max_pitch_output, max_pitch_output);
+    if(!rc_data.healthy){
+        motormixer_compute(0.0f, 0.0f, 0.0f, 0.0f); //kill motors if rc data is not healthy
+        return;
+    }
 
-    motormixer_compute(desired_throttle, roll_output, pitch_output, 0.0f);
+    float desired_throttle = rc_data.throttle_pwm-1000.0f; //convert to 0-1000 range
+    float desired_roll = rc_data.aileron_pwm - 1500.0f; //convert to -500 to 500 range
+    float desired_pitch = rc_data.elevator_pwm - 1500.0f; 
+    float desired_yaw = rc_data.rudder_pwm - 1500.0f; 
+
+    motormixer_compute(desired_throttle, desired_roll, desired_pitch, desired_yaw);
 }

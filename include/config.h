@@ -100,7 +100,7 @@ const float max_yaw_integral = 200.0f;
 
 const float max_roll_angle = 45.0f; 
 const float max_pitch_angle = 15.0f; 
-
+const float max_yaw_angle = 30.0f;
 /// for althold pid
 const float alt_kp = 1.0f;
 const float alt_ki = 0.0f;
