@@ -43,7 +43,7 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
 //IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 //IMU-------------
 
 // Control-------------
