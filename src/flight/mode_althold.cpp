@@ -35,7 +35,7 @@ void mode_alt_hold_run(){
     float des_roll = get_des_roll();
     float des_pitch = get_des_pitch();
     if (baro_data.healthy || gps_data.lock_acquired) {
-        des_pitch = altitude_pid.compute(target_altitude, actual_altitude, 0.1f);
+        des_pitch = altitude_pid.compute(target_altitude, actual_altitude, 0.1f);   //  where is target_altitude updated? 
         if (des_pitch > max_pitch_angle) {
             des_pitch = max_pitch_angle;
         }

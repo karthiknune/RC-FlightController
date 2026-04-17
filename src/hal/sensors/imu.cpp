@@ -94,6 +94,10 @@ void UpdateOrientation(IMUData_raw &data) {
 
     data.roll = g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG;
     data.pitch = g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG;
+
+
+    // Yaw will be provided by GPS heading until magnetometer fusion is implemented, so we won't populate it here
+    // why is there no yaw
 }
 
 void UpdateIMUAvailability(bool available) {

@@ -39,7 +39,7 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 //IMU-------------
@@ -56,8 +56,8 @@ constexpr float IMU_MAG_OFFSET_Y = 0.0f;
 constexpr float IMU_MAG_OFFSET_Z = 0.0f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
-constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = true;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
@@ -65,7 +65,7 @@ constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 //IMU-------------
 
 //Barometer-------------
-constexpr bool BARO_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
 //Barometer-------------
 
