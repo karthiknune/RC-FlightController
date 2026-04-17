@@ -170,7 +170,7 @@ const float max_alt_integral = 10.0f;
 
 //althold
 
-float target_alt_relative = 50.0f; // target altitude relative to takeoff point, in meters
+float target_alt_agl = 50.0f; // target altitude relative to takeoff point, in meters
 
 
 //waypoints

@@ -35,7 +35,7 @@ void mode_alt_hold_run(){
        // only run altitude hold if we have a valid altitude reading and home is set.
     if ((baro_data.healthy || gps_data.lock_acquired) && home_is_set()) {
         
-        float target_agl = target_alt_relative;
+        float target_agl = target_alt_agl;
         float actual_alt_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
         float actual_alt_agl = calc_AGL(actual_alt_msl);
 
