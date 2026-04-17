@@ -42,7 +42,7 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 //IMU-------------
@@ -73,8 +73,8 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 #define rudder_pin 14
 
 /// Receiver-----------
-constexpr bool RX_DEBUG_OUTPUT_ENABLED = false;
-constexpr bool PWM_OUTPUT_DEBUG_ENABLED = false;
+constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool PWM_OUTPUT_DEBUG_ENABLED = true;
 #define NUM_RX_CHANNELS 4
 #define rx_esc_pin  21
 #define rx_elevator_pin 32
