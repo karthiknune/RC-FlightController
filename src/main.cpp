@@ -14,6 +14,7 @@
 #include "flight/telemetry.h"
 #include "logging/sd_logger.h"
 #include "nav/waypoint.h"
+#include "flight/home.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
 IMUData_filtered imu_data = {};
@@ -26,6 +27,7 @@ PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_inte
 PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitch_integral);
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
 PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
+PIDController headingerror_pid(headingerror_kp, headingerror_ki, headingerror_kd, max_headingerror_output, max_headingerror_integral);
 
 namespace {
 
@@ -199,6 +201,14 @@ void TaskGPSRead(void *pvParameters) {
     for (;;) {
         if (GPS_Read(gps_data)) {
             if (gps_data.lock_acquired) {
+
+                if(!home_is_set()) {
+                    float home_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
+                    set_home_location(gps_data.latitude, gps_data.longitude, home_msl);
+                    Serial.println("Home location set.");
+
+                }
+
                 navigation.update(gps_data.latitude, gps_data.longitude, gps_data.altitude);
             }
         }

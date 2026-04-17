@@ -5,6 +5,7 @@
 #include "math/pid.h"
 #include "hal/sensors/imu.h"
 #include "hal/comms/rx_spektrum.h"
+#include "config.h"
 
 extern IMUData_filtered imu_data;
 extern PIDController roll_pid;
@@ -25,10 +26,9 @@ void mode_stabilize_run() {
     float des_pitch = get_des_pitch();
     float des_throttle = get_des_throttle();
 
-    float dt =0.1f; // shouldn't this dt be in config in case we wnat to change it later?
 
-    float roll = roll_pid.compute(des_roll , actual_roll, dt);
-    float pitch = pitch_pid.compute(des_pitch, actual_pitch, dt);
+    float roll = roll_pid.compute(des_roll , actual_roll, flight_control_dt_seconds);
+    float pitch = pitch_pid.compute(des_pitch, actual_pitch, flight_control_dt_seconds);
     float throttle = des_throttle;
 
     motormixer_compute(throttle, roll, pitch, 0.0f); ///////////////change throttle tp rc_throttle pwm

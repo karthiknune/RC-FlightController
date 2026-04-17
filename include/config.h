@@ -145,11 +145,21 @@ const float yaw_kd = 0.1f;
 const float max_yaw_output = 500.0f;
 const float max_yaw_integral = 200.0f;
 
+const float headingerror_kp = 1.0f;
+const float headingerror_ki = 0.0f;
+const float headingerror_kd = 0.1f;
+const float max_headingerror_output = max_roll_angle;
+const float max_headingerror_integral = 10.0f;
+
+
+const float flight_control_dt_seconds = FLIGHT_CONTROL_TASK_PERIOD_MS / 1000.0f;
+
 //Limits
 
 const float max_roll_angle = 45.0f; 
 const float max_pitch_angle = 15.0f; 
 const float max_yaw_angle = 30.0f;
+
 /// for althold pid
 const float alt_kp = 1.0f;
 const float alt_ki = 0.0f;
@@ -158,8 +168,12 @@ const float max_alt_output = max_pitch_angle;
 const float max_alt_integral = 10.0f;
 
 
+//althold
+
+float target_alt_relative = 50.0f; // target altitude relative to takeoff point, in meters
+
+
 //waypoints
-constexpr double NAV_EARTH_RADIUS_METERS = 6371000.0;
 constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
 constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
 constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
@@ -168,7 +182,7 @@ constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {
     
-    {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt
+    {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt_agl in m
     {2, 2, 100},
     
 };
