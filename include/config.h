@@ -15,9 +15,9 @@ constexpr int SCK_PIN = 5;
 constexpr int MOSI_PIN = 19;
 constexpr int MISO_PIN = 21;
 // LoRa control pins
-constexpr int CS_PIN = 26;
-constexpr int RST_PIN = 4;
-constexpr int IRQ_PIN = 18;
+constexpr int CS_PIN = 26;   // A0
+constexpr int RST_PIN = 4;   // A5
+constexpr int IRQ_PIN = 39;  // A3
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
