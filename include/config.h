@@ -6,6 +6,9 @@
 #include "datatypes.h"
 #include "flight/flightmodes.h"
 
+#define HARDWARE_NOT_FOUND 0
+#define HARDWARE_FOUND 1
+
 ///pin definintions
 
 
@@ -70,7 +73,8 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 #define rudder_pin 14
 
 /// Receiver-----------
-constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool RX_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool PWM_OUTPUT_DEBUG_ENABLED = false;
 #define NUM_RX_CHANNELS 4
 #define rx_esc_pin  21
 #define rx_elevator_pin 32
@@ -79,7 +83,8 @@ constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
 
 #define PWM_FREQ 50      // Standard servo frequency in Hz
 #define PWM_RESOLUTION 16 // 16-bit resolution for finer control
-#define SERVO_MIN       950 // Minimum pulse width in microseconds
+#define SERVO_MIN       500 // Minimum pulse width in microseconds
+#define SERVO_MAX       2500 // Maximum pulse width in microseconds
 
 #define THROTTLE_MIN    1171    // Minimum pulse width for throttle in microseconds
 #define THROTTLE_MAX    2210    // Maximum pulse width for throttle in microseconds

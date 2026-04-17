@@ -12,5 +12,5 @@ float get_des_pitch();
 float get_des_yaw();
 float get_des_throttle();
 bool get_auto_mode();
-
+char* debugRX();
 

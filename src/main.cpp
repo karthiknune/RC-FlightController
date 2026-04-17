@@ -213,49 +213,63 @@ void TaskTelemetryTx(void *pvParameters) {
 
 void setup() {
     Serial.begin(115200);
-    //while (!Serial); 
+    while (!Serial);
     
     pwm_init();
     motormixer_init();
     rx_init();
-    IMU_Init();
-    Barometer_Init();
-    GPS_Init();
+    int imuFound = IMU_Init();
+    int barometerFound = Barometer_Init();
+    int gpsFound = GPS_Init();
     navigation.restart_mission();
+    int loraFound = lora_init();
 
-    if (!lora_init()) {
-        Serial.println("LoRa init failed.");
+    if(PWM_OUTPUT_DEBUG_ENABLED) {
+        Serial.println(debugPWM());
+    }
+    Serial.println("PWM Debug complete");
+
+    if(imuFound == HARDWARE_FOUND) {
+        xTaskCreatePinnedToCore(
+            TaskIMURead,
+            "IMU_Task",
+            2048,
+            NULL,
+            1,
+            NULL,
+            1
+        );
+    } else {
+        Serial.println("Running without IMU. DO NOT FLY! Check wiring and restart.");
     }
 
-    xTaskCreatePinnedToCore(
-        TaskIMURead,
-        "IMU_Task",
-        2048,
-        NULL,
-        1,
-        NULL,
-        1
-    );
+    if(barometerFound == HARDWARE_FOUND) {
+        xTaskCreatePinnedToCore(
+            TaskBarometerRead,
+            "Baro_Task",
+            BARO_TASK_STACK_SIZE,
+            NULL,
+            BARO_TASK_PRIORITY,
+            NULL,
+            BARO_TASK_CORE
+        );
+    } else {
+        Serial.println("Running without Barometer. DO NOT FLY! Check wiring and restart.");
+    }
 
-    xTaskCreatePinnedToCore(
-        TaskBarometerRead,
-        "Baro_Task",
-        BARO_TASK_STACK_SIZE,
-        NULL,
-        BARO_TASK_PRIORITY,
-        NULL,
-        BARO_TASK_CORE
-    );
-
-    xTaskCreatePinnedToCore(
-        TaskGPSRead,            // Function to implement the task
-        "GPS_Task",             // Name of the task
-        GPS_TASK_STACK_SIZE,    // Stack size in words
-        NULL,                   // Task input parameter
-        GPS_TASK_PRIORITY,      // Priority
-        NULL,                   // Task handle
-        GPS_TASK_CORE           // Pin to Core 1
-    );
+    if(gpsFound == HARDWARE_FOUND) {
+        xTaskCreatePinnedToCore(
+            TaskGPSRead,
+            "GPS_Task",
+            GPS_TASK_STACK_SIZE,
+            NULL,
+            GPS_TASK_PRIORITY,
+            NULL,
+            GPS_TASK_CORE
+        );
+    } else {
+        Serial.println("Running without GPS. Check wiring and restart.");
+    }
 
     xTaskCreatePinnedToCore(
         TaskFlightControl,
@@ -285,10 +299,10 @@ void loop() {
         Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
     }
     if (RX_DEBUG_OUTPUT_ENABLED) {
-        Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f | Throttle: %6.2f\n",
+        Serial.printf("RX_Aileron: %6.2f | RX_Elevator: %6.2f | RX_Rudder: %6.2f | RX_Throttle: %6.2f\n",
             get_des_roll(), get_des_pitch(), get_des_yaw(), get_des_throttle());
+        Serial.printf("%s", debugRX());
     }
-    Serial.printf("I'm alive!");
 
     delay(50); 
 }

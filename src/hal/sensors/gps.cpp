@@ -284,7 +284,7 @@ bool process_incoming_byte(char incoming_byte, GPSData &data) {
 
 } // namespace
 
-void GPS_Init() {
+int GPS_Init() {
     gps_serial.begin(GPS_BAUD_RATE, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
     gps_sentence_length = 0;
@@ -294,6 +294,7 @@ void GPS_Init() {
         Serial.printf("Initializing GPS on UART%d at %lu baud...\n", GPS_UART_NUM, GPS_BAUD_RATE);
         Serial.println("Waiting for data stream...\n");
     }
+    return HARDWARE_FOUND;
 }
 
 bool GPS_Read(GPSData &data) {

@@ -4,16 +4,18 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include "config.h"
 
 
 Adafruit_MPU6050 mpu;
 unsigned long lastTime = 0;
 
-void IMU_Init() {
+int IMU_Init() {
     Wire.begin(); // Uses default SDA/SCL pins for ESP32 Feather V2
     
     if (!mpu.begin()) {
         Serial.println("Failed to find MPU6050 chip");
+        return HARDWARE_NOT_FOUND;
         while (1) {
             delay(10); // Halt execution if IMU isn't found
         }
@@ -26,6 +28,7 @@ void IMU_Init() {
     
     lastTime = micros();
     Serial.println("IMU Initialized Successfully.");
+    return HARDWARE_FOUND;
 }
 
 void IMU_Read(IMUData_raw &data) {

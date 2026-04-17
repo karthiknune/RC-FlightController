@@ -11,6 +11,8 @@ float raw_elevator_pwm = 1500;
 float raw_throttle_pwm = 1000;
 float raw_flightmode_pwm = 1900;
 
+char debug_str[512] = "";
+
 enum rx_input_t {
     RX_ESC_INP = 0,
     RX_ELEVATOR_INP,
@@ -80,7 +82,7 @@ void rx_init() {
 
 // Gives Receiver Throttole as percentage (0-100%)
 float get_des_throttle() {
-  if(pulse_widths[RX_ESC_INP] < SERVO_MIN) {
+  if((pulse_widths[RX_ESC_INP] < SERVO_MIN) || (pulse_widths[RX_ESC_INP] > SERVO_MAX)) {
     return std::numeric_limits<float>::quiet_NaN();
   }
   return (((long)pulse_widths[RX_ESC_INP] - THROTTLE_INT) / THROTTLE_SLOPE);
@@ -88,7 +90,7 @@ float get_des_throttle() {
 
 // Gives Receiever Aileron Deflection Angle in Degrees
 float get_des_pitch() {
-  if(pulse_widths[RX_ELEVATOR_INP] < SERVO_MIN) {
+  if((pulse_widths[RX_ELEVATOR_INP] < SERVO_MIN) || (pulse_widths[RX_ELEVATOR_INP] > SERVO_MAX)) {
     return std::numeric_limits<float>::quiet_NaN();
   }
   return (((long)pulse_widths[RX_ELEVATOR_INP] - ELEVATOR_INT) / ELEVATOR_SLOPE);
@@ -100,7 +102,7 @@ float get_des_roll() {
 
 // Gives Receiver Rudder Deflection Angle in Degrees
 float get_des_yaw() {
-  if(pulse_widths[RX_RUDDER_INP] < SERVO_MIN) {
+  if((pulse_widths[RX_RUDDER_INP] < SERVO_MIN) || (pulse_widths[RX_RUDDER_INP] > SERVO_MAX)) {
     return std::numeric_limits<float>::quiet_NaN();
   }
   return (((long)pulse_widths[RX_RUDDER_INP] - RUDDER_INT) / RUDDER_SLOPE);
@@ -109,4 +111,10 @@ float get_des_yaw() {
 // Gives Receiver Requested Flight Mode
 bool get_auto_mode() {
     return (pulse_widths[RX_MODE_INP] >= AUTO_MODE_THRESHOLD);
+}
+
+char* debugRX() {
+    snprintf(debug_str, sizeof(debug_str), "ESC PWM: %lu | Elevator PWM: %lu | Rudder PWM: %lu | Mode PWM: %lu\n",
+        pulse_widths[RX_ESC_INP], pulse_widths[RX_ELEVATOR_INP], pulse_widths[RX_RUDDER_INP], pulse_widths[RX_MODE_INP]);
+    return debug_str;
 }

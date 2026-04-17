@@ -4,6 +4,9 @@
 // Sets the ESC as percentage. 
 // -1 will send a low signal to initialize the ESC.
 // Note: duty values scaled from MicroPython 0-1023 range to 10-bit C range.
+
+char PWM_DEBUG_STR[256] = "";
+
 void setThrottle(int pulse) {
   if(pulse < 0) {
     pulse = THROTTLE_INIT;
@@ -36,6 +39,10 @@ float pwmToThrottle(unsigned long pw) {
   return (((long)pw - THROTTLE_INT) / THROTTLE_SLOPE);
 }
 
+int ThrottleToPWM(float throttle_percent) {
+    return (int)((throttle_percent * THROTTLE_SLOPE) + THROTTLE_INT);
+}
+
 // Convert PWM to Airfoil Deflection Angle
 float pwmToRudder(unsigned long pw) {
   if(pw < SERVO_MIN) {
@@ -44,12 +51,20 @@ float pwmToRudder(unsigned long pw) {
   return (((long)pw - RUDDER_INT) / RUDDER_SLOPE);
 }
 
+int RudderToPWM(float rudder_angle) {
+    return (int)((rudder_angle * RUDDER_SLOPE) + RUDDER_INT);
+}
+
 // Convert PWM to Airfoil Deflection Angle
 float pwmToElevator(unsigned long pw) {
   if(pw < SERVO_MIN) {
     return NAN;
   }
   return (((long)pw - ELEVATOR_INT) / ELEVATOR_SLOPE);
+}
+
+int ElevatorToPWM(float elevator_angle) {
+    return (int)((elevator_angle * ELEVATOR_SLOPE) + ELEVATOR_INT);
 }
 
 void pwm_init() {
@@ -71,6 +86,23 @@ void pwm_init() {
 void pwm_reset() {
     //  neutral positions
     setThrottle(-1);
-    setElevator(0);
-    setRudder(0);
+    setElevator(ElevatorToPWM(0));
+    setRudder(RudderToPWM(0));
+}
+
+char* debugPWM() {
+    setThrottle(-1);
+    sleep(3);
+    setThrottle(ThrottleToPWM(20));
+    setElevator(ElevatorToPWM(5));
+    setRudder(RudderToPWM(5));
+    sleep(3);
+    setThrottle(ThrottleToPWM(0));
+    setElevator(ElevatorToPWM(-5));
+    setRudder(RudderToPWM(-5));
+    sleep(3);
+    pwm_reset();
+    sleep(10);
+    snprintf(PWM_DEBUG_STR, sizeof(PWM_DEBUG_STR), "%f | %f | %f | %f\n", ThrottleToPWM(20), ElevatorToPWM(5), RudderToPWM(5), ThrottleToPWM(0));
+    return PWM_DEBUG_STR;
 }
