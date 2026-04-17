@@ -6,6 +6,7 @@
 #include "flight/motormixer.h"
 #include "hal/sensors/imu.h"
 #include "hal/sensors/baro.h"
+#include "hal/sensors/sensor_bus.h"
 #include "hal/sensors/gps.h"
 #include "hal/comms/lora.h"
 #include "hal/comms/rx_spektrum.h"
@@ -29,13 +30,35 @@ namespace {
 
 bool g_flight_mode_initialized = false;
 
-void UpdateFilteredIMUData() {
-    imu_data.roll = currentIMU.roll;
-    imu_data.pitch = currentIMU.pitch;
+void RunStartupIMUCalibrationIfEnabled() {
+    if (IMU_RUN_STARTUP_GYRO_CALIBRATION) {
+        (void)IMU_Calibrate_Gyro();
+    }
 
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
+    if (IMU_RUN_STARTUP_LEVEL_CALIBRATION) {
+        float roll_offset_deg = 0.0f;
+        float pitch_offset_deg = 0.0f;
+        (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
+    }
+}
+
+void UpdateFilteredIMUData() {
+    if (currentIMU.healthy) {
+        imu_data.roll = currentIMU.roll;
+        imu_data.pitch = currentIMU.pitch;
+    }
+
+    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    // GPS still provides the best heading until tilt-compensated mag fusion is added
         imu_data.yaw = gps_data.heading;
     }
+}
+
+FlightMode ResolveFlightModeFallback(FlightMode requested_mode) {
+    if (requested_mode != FlightMode::Manual && !currentIMU.healthy) {
+        return FlightMode::Manual;
+    }
+
+    return requested_mode;
 }
 
 FlightMode DetermineFlightMode() {
@@ -146,7 +169,7 @@ telemetrydata BuildTelemetrySnapshot() {
 
 void TaskIMURead(void *pvParameters) {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = pdMS_TO_TICKS(IMU_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
@@ -192,8 +215,9 @@ void TaskFlightControl(void *pvParameters) {
         rx_read();
 
         const FlightMode desired_mode = DetermineFlightMode();
-        if (!g_flight_mode_initialized || desired_mode != active_flight_mode) {
-            active_flight_mode = desired_mode;
+        const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
+        if (!g_flight_mode_initialized || effective_mode != active_flight_mode) {
+            active_flight_mode = effective_mode;
             InitializeFlightMode(active_flight_mode);
             g_flight_mode_initialized = true;
         }
@@ -219,10 +243,15 @@ void setup() {
     Serial.begin(115200);
     while (!Serial); 
     
+    if (!SensorBus_Init()) {
+        Serial.println("Sensor I2C bus init failed.");
+    }
+
     pwm_init();
     motormixer_init();
     rx_init();
     IMU_Init();
+    RunStartupIMUCalibrationIfEnabled();
     Barometer_Init();
     GPS_Init();
     navigation.restart_mission();
@@ -234,11 +263,11 @@ void setup() {
     xTaskCreatePinnedToCore(
         TaskIMURead,
         "IMU_Task",
-        2048,
+        IMU_TASK_STACK_SIZE,
         NULL,
-        1,
+        IMU_TASK_PRIORITY,
         NULL,
-        1
+        IMU_TASK_CORE
     );
 
     xTaskCreatePinnedToCore(
@@ -286,7 +315,23 @@ void loop() {
     // Core 0 handles the default loop(). We will just use it to print data.
 
     if (IMU_DEBUG_OUTPUT_ENABLED) {
-        Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+        if (currentIMU.healthy) {
+            Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+        }
+    }
+
+    if (BARO_DEBUG_OUTPUT_ENABLED) {
+        if (baro_data.healthy) {
+            Serial.printf("Baro Altitude: %6.2f m | Pressure: %7.2f hPa\n", baro_data.altitude, baro_data.pressure);
+        }
+    }
+
+    if (GPS_DEBUG_OUTPUT_ENABLED) {
+        if (gps_data.healthy) {
+            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading);
+        } else {
+            Serial.println("GPS reading unhealthy");
+        }
     }
 
     delay(50); 

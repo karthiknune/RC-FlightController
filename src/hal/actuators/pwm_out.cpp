@@ -29,7 +29,7 @@ void pwm_write(uint8_t channel, uint16_t microseconds) {
 
 void pwm_reset() {
     //  neutral positions
-    pwm_write(esc_channel, 1000); 
+    pwm_write(esc_channel, 1000); //    default PWM uS value should be a variable in config.h
     pwm_write(aileron_channel, 1500); 
     pwm_write(elevator_channel, 1500); 
     pwm_write(rudder_channel, 1500); 

@@ -39,16 +39,53 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 //IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
+constexpr int IMU_TASK_PERIOD_MS = 10;
+constexpr int IMU_TASK_STACK_SIZE = 4096;
+constexpr int IMU_TASK_PRIORITY = 1;
+constexpr int IMU_TASK_CORE = 1;
+constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;      // Matches Mukund's ICM-20948 mounting
+constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
+constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
+constexpr float IMU_MAG_OFFSET_X = 0.0f;
+constexpr float IMU_MAG_OFFSET_Y = 0.0f;
+constexpr float IMU_MAG_OFFSET_Z = 0.0f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = true;
+constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
+constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
+constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
+constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 //IMU-------------
 
+//Barometer-------------
+constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
+constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
+//Barometer-------------
+
+// I2C-------------
+constexpr int I2C_SDA_PIN = 22;
+constexpr int I2C_SCL_PIN = 20;
+constexpr uint32_t I2C_BUS_FREQUENCY_HZ = 400000UL;
+// I2C-------------
+
+// Sensor bus / recovery-------------
+constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 20;
+constexpr int SENSOR_I2C_LOCK_TIMEOUT_MS = 20;
+constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
+constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
+// Sensor bus / recovery-------------
+
+
 // Control-------------
-constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Waypoint;
-constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;
+constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
+constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
 constexpr float FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0f;
 constexpr float FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0f;
 constexpr float FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0f;
@@ -65,16 +102,16 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 ///Motor and servo pins
 
-#define esc_pin 0
-#define aileron_pin 1
-#define elevator_pin 2
-#define rudder_pin 3
+#define esc_pin 13
+#define aileron_pin 12
+#define elevator_pin 33
+#define rudder_pin 15
 
 //channels
 
 const int esc_channel = 0;
 const int aileron_channel = 1;
-const int elevator_channel = 2;    
+const int elevator_channel = 2;
 const int rudder_channel = 3;
 
 ///tuning parameters
@@ -116,10 +153,10 @@ constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
 constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
 constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 
-const int num_waypoints = 2;               
+const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {
     
-    {2.0536, 1.2189333333333333333, 100},
+    {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt
     {2, 2, 100},
     
 };

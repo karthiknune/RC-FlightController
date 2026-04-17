@@ -1,4 +1,5 @@
 #pragma once
+#include "datatypes.h"
 
 extern RCData rc_data;
 
