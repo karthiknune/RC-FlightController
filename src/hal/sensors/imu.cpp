@@ -1,10 +1,20 @@
+// --- src/hal/sensors/imu.cpp ---
 #include "hal/sensors/imu.h"
-
-#include <cmath>
-
+#include "hal/sensors/i2c_bus.h"
 #include <Wire.h>
 #include <Adafruit_ICM20948.h>
 #include <Adafruit_Sensor.h>
+#include "config.h"
+
+Adafruit_ICM20948 icm;
+
+void IMU_Init()
+{
+    i2c_bus_init();
+
+    // Wake up the I2C bus
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    Wire.setClock(I2C_BUS_FREQUENCY_HZ);
 
 #include "config.h"
 #include "hal/sensors/sensor_bus.h"

@@ -6,8 +6,7 @@
 #include "datatypes.h"
 #include "flight/flightmodes.h"
 
-///pin definintions
-
+/// pin definintions
 
 // LoRa-------------
 // LoRa SPI pins
@@ -32,7 +31,7 @@ constexpr int GPS_UART_NUM = 2;
 constexpr unsigned long GPS_BAUD_RATE = 115200UL;
 constexpr int GPS_TX_PIN = 8;
 constexpr int GPS_RX_PIN = 7;
-constexpr int GPS_TIME_ZONE_OFFSET = -4;    //  UTC-4 for Eastern Daylight Time (EDT)
+constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
 constexpr int GPS_TASK_PERIOD_MS = 50;
 constexpr int GPS_TASK_STACK_SIZE = 4096;
 constexpr int GPS_TASK_PRIORITY = 1;
@@ -51,7 +50,7 @@ constexpr int IMU_TASK_CORE = 1;
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;      // Matches Mukund's ICM-20948 mounting
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X = 0.0f;
+constexpr float IMU_MAG_OFFSET_X = 0.0f;//move to imu.cpp//
 constexpr float IMU_MAG_OFFSET_Y = 0.0f;
 constexpr float IMU_MAG_OFFSET_Z = 0.0f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
@@ -99,6 +98,7 @@ constexpr int FLIGHT_CONTROL_TASK_PRIORITY = 1;
 constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 // Control-------------
 
+/// Motor and servo pins
 
 ///Motor and servo pins
 
@@ -107,14 +107,14 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 #define elevator_pin 33
 #define rudder_pin 15
 
-//channels
+// channels
 
 const int esc_channel = 0;
 const int aileron_channel = 1;
 const int elevator_channel = 2;
 const int rudder_channel = 3;
 
-///tuning parameters
+/// tuning parameters
 const float roll_kp = 1.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
@@ -133,10 +133,11 @@ const float yaw_kd = 0.1f;
 const float max_yaw_output = 500.0f;
 const float max_yaw_integral = 200.0f;
 
-//Limits
 
-const float max_roll_angle = 45.0f; 
-const float max_pitch_angle = 15.0f; 
+// Limits
+
+const float max_roll_angle = 45.0f;
+const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 /// for althold pid
 const float alt_kp = 1.0f;
@@ -145,8 +146,7 @@ const float alt_kd = 0.1f;
 const float max_alt_output = max_pitch_angle;
 const float max_alt_integral = 10.0f;
 
-
-//waypoints
+// waypoints
 constexpr double NAV_EARTH_RADIUS_METERS = 6371000.0;
 constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
 constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
@@ -158,6 +158,5 @@ const waypoint missionwaypoints[]= {
     
     {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt
     {2, 2, 100},
-    
-};
 
+};
