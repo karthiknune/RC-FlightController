@@ -12,6 +12,7 @@
 #include "hal/comms/rx_spektrum.h"
 #include "hal/actuators/pwm_out.h"
 #include "flight/telemetry.h"
+#include "logging/sd_logger.h"
 #include "nav/waypoint.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
@@ -239,6 +240,30 @@ void TaskTelemetryTx(void *pvParameters) {
     }
 }
 
+void TaskSDLog(void *pvParameters) {
+    if (!SD_LOGGING_ENABLED) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(SD_LOG_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        const telemetrydata snapshot = BuildTelemetrySnapshot();
+        SD_Logger_LogData(snapshot);
+
+        // Periodically flush the file to prevent data loss on power failure
+        static int flush_counter = 0;
+        if (++flush_counter >= 20) { // Flush every 1 second at 20Hz
+            SD_Logger_Flush();
+            flush_counter = 0;
+        }
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
@@ -258,6 +283,18 @@ void setup() {
 
     if (!lora_init()) {
         Serial.println("LoRa init failed.");
+    }
+
+    if (SD_LOGGING_ENABLED) {
+        if (SD_Logger_Init()) {
+            if (SD_Logger_CreateNewLog()) {
+                SD_Logger_WriteHeader();
+            }
+        } else {
+            // If init fails, the logger functions have checks for a valid file handle,
+            // so the logging task will safely do nothing.
+            Serial.println("SD Card Init Failed. Logging will be disabled.");
+        }
     }
 
     xTaskCreatePinnedToCore(
@@ -309,6 +346,18 @@ void setup() {
         NULL,
         TELEMETRY_TASK_CORE
     );
+
+    if (SD_LOGGING_ENABLED) {
+        xTaskCreatePinnedToCore(
+            TaskSDLog,
+            "SD_Log_Task",
+            SD_LOG_TASK_STACK_SIZE,
+            NULL,
+            SD_LOG_TASK_PRIORITY,
+            NULL,
+            SD_LOG_TASK_CORE
+        );
+    }
 }
 
 void loop() {

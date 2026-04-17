@@ -27,6 +27,18 @@ constexpr int TELEMETRY_TASK_PRIORITY = 1;
 constexpr int TELEMETRY_TASK_CORE = 1;
 // LoRa-------------
 
+// SD Card Logger-------------
+constexpr bool SD_LOGGING_ENABLED = true;
+constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
+constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
+constexpr int SD_LOG_TASK_PRIORITY = 1;
+constexpr int SD_LOG_TASK_CORE = 1;
+constexpr uint8_t SD_SCK = 5;
+constexpr uint8_t SD_MOSI = 19;
+constexpr uint8_t SD_MISO = 21;
+constexpr uint8_t SD_CS = 4;   // Connected to A5
+// SD Card Logger-------------
+
 // GPS-------------
 constexpr int GPS_UART_NUM = 2;
 constexpr unsigned long GPS_BAUD_RATE = 115200UL;
@@ -160,4 +172,3 @@ const waypoint missionwaypoints[]= {
     {2, 2, 100},
     
 };
-

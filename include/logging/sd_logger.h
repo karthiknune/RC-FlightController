@@ -1,0 +1,22 @@
+#pragma once
+
+#include <Arduino.h>
+#include "datatypes.h"
+
+// Initializes the SD card using the custom SPI bus
+bool SD_Logger_Init();
+
+// Creates a new, unique log file on the SD card.
+bool SD_Logger_CreateNewLog();
+
+// Writes the CSV header to the currently open log file.
+void SD_Logger_WriteHeader();
+
+// Logs a telemetry data snapshot as a CSV row.
+void SD_Logger_LogData(const telemetrydata& data);
+
+// Flushes the write buffer to the SD card.
+void SD_Logger_Flush();
+
+// Closes the currently open log file.
+void SD_Logger_CloseLog();
