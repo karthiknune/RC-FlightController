@@ -155,7 +155,7 @@ float Navigation::get_target_distance() {
 }
 
 float Navigation::get_target_altitude() {
-    if (current_waypoint_index >= num_waypoints) {
+    if (current_waypoint_index >= num_waypoints && num_waypoints > 0) {
         return missionwaypoints[num_waypoints -1].alt_AGL;
     }
 

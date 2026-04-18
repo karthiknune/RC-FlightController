@@ -126,6 +126,12 @@ const int aileron_channel = 1;
 const int elevator_channel = 2;
 const int rudder_channel = 3;
 
+//Limits
+
+const float max_roll_angle = 45.0f; 
+const float max_pitch_angle = 15.0f; 
+const float max_yaw_angle = 30.0f;
+
 ///tuning parameters
 const float roll_kp = 1.0f;
 const float roll_ki = 0.0f;
@@ -154,11 +160,6 @@ const float max_headingerror_integral = 10.0f;
 
 const float flight_control_dt_seconds = FLIGHT_CONTROL_TASK_PERIOD_MS / 1000.0f;
 
-//Limits
-
-const float max_roll_angle = 45.0f; 
-const float max_pitch_angle = 15.0f; 
-const float max_yaw_angle = 30.0f;
 
 /// for althold pid
 const float alt_kp = 1.0f;
@@ -170,7 +171,7 @@ const float max_alt_integral = 10.0f;
 
 //althold
 
-float target_alt_agl = 50.0f; // target altitude relative to takeoff point, in meters
+const float target_alt_agl = 50.0f; // target altitude relative to takeoff point, in meters
 
 
 //waypoints

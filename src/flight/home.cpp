@@ -3,10 +3,10 @@
 
 namespace{
 HomeState home = {
-    .lat = 0.0,
-    .lon = 0.0,
-    .alt_MSL = 0.0f,
-    .is_set = false
+     0.0,
+     0.0,
+     0.0f,
+     false
 };
 }
 
@@ -25,7 +25,7 @@ float calc_AGL(float current_msl){
 }
 
 waypoint get_home_location(){
-    return {home.lat, home.lon, home.alt_MSL};
+    return {home.lat, home.lon, 0};//agl
 }
 
 bool home_is_set(){
