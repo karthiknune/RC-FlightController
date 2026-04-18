@@ -284,6 +284,9 @@ void setup() {
     if (!lora_init()) {
         Serial.println("LoRa init failed.");
     }
+    else {
+        Serial.println("LoRa init succeeded.");
+    }
 
     if (SD_LOGGING_ENABLED) {
         if (SD_Logger_Init()) {
