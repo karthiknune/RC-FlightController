@@ -69,16 +69,18 @@ bool payload_looks_like_json(const uint8_t *data, size_t length) {
 void send_tuning_ack(const char *status,
                      const char *reason,
                      uint32_t version,
-                     bool changed) {
+                     bool changed,
+                     uint32_t cmd_id) {
     char ack_payload[PID_TUNING_LORA_MAX_PAYLOAD_BYTES + 1] = {};
     const int ack_len = snprintf(
         ack_payload,
         sizeof(ack_payload),
-        "{\"type\":\"pid_tuning_ack\",\"status\":\"%s\",\"reason\":\"%s\",\"version\":%lu,\"changed\":%s}",
+        "{\"type\":\"pid_tuning_ack\",\"status\":\"%s\",\"reason\":\"%s\",\"version\":%lu,\"changed\":%s,\"cmd_id\":%lu}",
         status,
         reason,
         static_cast<unsigned long>(version),
-        changed ? "true" : "false");
+        changed ? "true" : "false",
+        static_cast<unsigned long>(cmd_id));
 
     if (ack_len <= 0 ||
         static_cast<size_t>(ack_len) > PID_TUNING_LORA_MAX_PAYLOAD_BYTES) {
@@ -573,25 +575,37 @@ bool PIDTuning_ApplyLoRaUpdate(const uint8_t *data, size_t length) {
     DeserializationError error = deserializeJson(doc, payload);
     if (error || !doc.is<JsonObjectConst>()) {
         Serial.printf("PID tuning: LoRa JSON parse failed: %s\n", error.c_str());
-        send_tuning_ack("nack", "json_parse", g_pid_config.version, false);
+        send_tuning_ack("nack", "json_parse", g_pid_config.version, false, 0);
         return false;
+    }
+
+    uint32_t cmd_id = 0;
+    JsonObjectConst root = doc.as<JsonObjectConst>();
+    JsonVariantConst cmd_id_value = root["cmd_id"];
+    if (!cmd_id_value.isNull() && is_numeric_field(cmd_id_value)) {
+        const long parsed_cmd_id = cmd_id_value.as<long>();
+        if (parsed_cmd_id > 0) {
+            cmd_id = static_cast<uint32_t>(parsed_cmd_id);
+        }
     }
 
     PIDRuntimeConfig next = g_pid_config;
     bool changed = false;
-    if (!merge_json_into_config(doc.as<JsonObjectConst>(), next, changed)) {
-        send_tuning_ack("nack", "unknown_fields", g_pid_config.version, false);
+    if (!merge_json_into_config(root, next, changed)) {
+        send_tuning_ack(
+            "nack", "unknown_fields", g_pid_config.version, false, cmd_id);
         return false;
     }
 
     if (!changed) {
-        send_tuning_ack("ack", "no_change", g_pid_config.version, false);
+        send_tuning_ack("ack", "no_change", g_pid_config.version, false, cmd_id);
         return false;
     }
 
     if (!runtime_config_is_valid(next)) {
         Serial.println("PID tuning: rejected LoRa update due to invalid limits.");
-        send_tuning_ack("nack", "invalid_limits", g_pid_config.version, false);
+        send_tuning_ack(
+            "nack", "invalid_limits", g_pid_config.version, false, cmd_id);
         return false;
     }
 
@@ -602,7 +616,7 @@ bool PIDTuning_ApplyLoRaUpdate(const uint8_t *data, size_t length) {
     Serial.printf("PID tuning: LoRa update applied (version=%lu).\n",
                   static_cast<unsigned long>(g_pid_config.version));
 
-    send_tuning_ack("ack", "applied", g_pid_config.version, true);
+    send_tuning_ack("ack", "applied", g_pid_config.version, true, cmd_id);
 
     if (PID_TUNING_PERSIST_TO_SD) {
         if (!PIDTuning_SaveCurrentToSD()) {

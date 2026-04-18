@@ -1,43 +1,38 @@
 #include <SPI.h>
 #include <LoRa.h>
 #include <stdint.h>
+#include <string.h>
 
 // Paste one JSON command per line in Arduino IDE Serial Monitor, then press Enter.
+// Ground station auto-adds cmd_id and waits for flight ACK/NACK.
 // Examples:
 // {"axis":"roll","kp":18.5}
 // {"axis":"roll","kp":18.5,"ki":0.02,"kd":0.12}
-// {"axis":"pitch","max_output":420,"max_integral":120}
 // {"pid":{"roll":{"kp":19.0,"ki":0.01,"kd":0.10},"pitch":{"kp":17.0,"ki":0.00,"kd":0.08}}}
 // {"axis":"headingerror","kp":0.8,"ki":0.0,"kd":0.04}
 
 // ESP32-WROOM DevKit + SX1276/SX1278 wiring.
 // Change these only if your receiver module is wired differently.
-struct LoRaPinProfile {
-  const char *name;
-  int sck;
-  int miso;
-  int mosi;
-  int cs;
-  int rst;
-  int irq;
-};
+constexpr int SCK_PIN = 18;
+constexpr int MISO_PIN = 19;
+constexpr int MOSI_PIN = 23;
+constexpr int CS_PIN = 5;
 
-// Auto-probe common ESP32 + SX127x pin maps.
-constexpr LoRaPinProfile kLoRaProfiles[] = {
-    {"devkit_ra02_default", 18, 19, 23, 5, 14, 2},
-    {"devkit_ra02_common", 5, 19, 27, 18, 14, 26},
-    {"feather_style_shared_spi", 5, 21, 19, 26, 4, 39},
-    {"devkit_alt_cs", 18, 19, 23, 18, 14, 26},
-};
-constexpr size_t LORA_PROFILE_COUNT =
-    sizeof(kLoRaProfiles) / sizeof(kLoRaProfiles[0]);
+// Optional for bring-up; set to actual pins if wired.
+constexpr int RST_PIN = 4;
+constexpr int IRQ_PIN = 2;
 
 constexpr long LORA_FREQ = 915E6;
 constexpr uint8_t SYNC_WORD = 0xF3;
 constexpr int SPREADING_FACTOR = 7;
+constexpr long LORA_SPI_FREQUENCY = 2000000L;
+
 constexpr unsigned long SERIAL_BAUD = 115200UL;
 constexpr size_t MAX_COMMAND_BYTES = 240U;
 constexpr size_t MAX_RX_PACKET_BYTES = 255U;
+constexpr uint8_t COMMAND_MAX_RETRIES = 4U;
+constexpr uint32_t COMMAND_ACK_TIMEOUT_MS = 1200UL;
+constexpr uint32_t COMMAND_RETRY_GAP_MS = 120UL;
 
 struct TelemetryPacket {
   float roll;
@@ -77,72 +72,8 @@ struct TelemetryPacket {
 static_assert(sizeof(TelemetryPacket) == 128, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
+uint32_t g_next_command_id = 1;
 String g_pending_command;
-const LoRaPinProfile *g_active_profile = nullptr;
-
-void PrintCommandHelp() {
-  Serial.println("LoRa command TX enabled.");
-  Serial.println("Type one JSON object per line, then press Enter.");
-  Serial.println("Examples:");
-  Serial.println("  {\"axis\":\"roll\",\"kp\":18.5}");
-  Serial.println("  {\"axis\":\"roll\",\"kp\":18.5,\"ki\":0.02,\"kd\":0.12}");
-  Serial.println("  {\"pid\":{\"roll\":{\"kp\":19.0,\"ki\":0.01,\"kd\":0.10}}}");
-  Serial.println();
-}
-
-void SendCommandOverLoRa(const String &command) {
-  if (command.length() == 0U) {
-    return;
-  }
-
-  if (command.length() > MAX_COMMAND_BYTES) {
-    Serial.printf("TX reject: command too long (%u > %u bytes)\n",
-                  static_cast<unsigned>(command.length()),
-                  static_cast<unsigned>(MAX_COMMAND_BYTES));
-    return;
-  }
-
-  const int begin_status = LoRa.beginPacket();
-  if (begin_status != 1) {
-    Serial.println("TX failed: LoRa.beginPacket() returned error");
-    return;
-  }
-
-  const size_t written = LoRa.print(command);
-  const int end_status = LoRa.endPacket();
-  LoRa.receive();
-  if ((written == command.length()) && (end_status == 1)) {
-    Serial.print("TX JSON: ");
-    Serial.println(command);
-  } else {
-    Serial.println("TX failed: incomplete packet write");
-  }
-}
-
-void HandleSerialCommandInput() {
-  while (Serial.available() > 0) {
-    const char ch = static_cast<char>(Serial.read());
-
-    if (ch == '\r') {
-      continue;
-    }
-
-    if (ch == '\n') {
-      g_pending_command.trim();
-
-      if (g_pending_command.length() > 0U) {
-        SendCommandOverLoRa(g_pending_command);
-      }
-
-      g_pending_command = "";
-      continue;
-    }
-
-    if (g_pending_command.length() < (MAX_COMMAND_BYTES + 16U)) {
-      g_pending_command += ch;
-    }
-  }
-}
 
 void DumpPacketHex(const uint8_t *data, size_t length) {
   Serial.println("Raw payload:");
@@ -155,7 +86,6 @@ void DumpPacketHex(const uint8_t *data, size_t length) {
     Serial.printf("%02X ", value);
   }
 
-  Serial.println();
   Serial.println();
 }
 
@@ -217,82 +147,88 @@ void PrintPacket(const TelemetryPacket &packet, int rssi, float snr) {
   Serial.println();
 }
 
-bool InitLoRa() {
-  for (size_t i = 0; i < LORA_PROFILE_COUNT; ++i) {
-    const LoRaPinProfile &profile = kLoRaProfiles[i];
+bool BuildCommandWithId(const String &raw_command,
+                        uint32_t cmd_id,
+                        String &command_with_id) {
+  command_with_id = raw_command;
+  command_with_id.trim();
 
-    Serial.printf(
-        "Trying LoRa profile %u/%u: %s (SCK=%d MISO=%d MOSI=%d CS=%d RST=%d IRQ=%d)\n",
-        static_cast<unsigned>(i + 1U),
-        static_cast<unsigned>(LORA_PROFILE_COUNT),
-        profile.name,
-        profile.sck,
-        profile.miso,
-        profile.mosi,
-        profile.cs,
-        profile.rst,
-        profile.irq);
+  if (command_with_id.length() == 0U) {
+    return false;
+  }
 
-    LoRa.end();
-    SPI.end();
-    delay(20);
+  if (command_with_id.charAt(0) != '{' ||
+      command_with_id.charAt(command_with_id.length() - 1U) != '}') {
+    return false;
+  }
 
-    SPI.begin(profile.sck, profile.miso, profile.mosi, profile.cs);
-    LoRa.setSPI(SPI);
-    LoRa.setPins(profile.cs, profile.rst, profile.irq);
-
-    if (!LoRa.begin(LORA_FREQ)) {
-      Serial.println("  -> begin failed\n");
-      continue;
-    }
-
-    LoRa.setSyncWord(SYNC_WORD);
-    LoRa.setSpreadingFactor(SPREADING_FACTOR);
-    LoRa.receive();
-    g_active_profile = &profile;
-
-    Serial.printf("  -> init success with profile: %s\n\n", profile.name);
+  if (command_with_id.indexOf("\"cmd_id\"") >= 0) {
     return true;
   }
 
-  return false;
+  const bool has_existing_fields = command_with_id.length() > 2U;
+  command_with_id.remove(command_with_id.length() - 1U);
+  if (has_existing_fields) {
+    command_with_id += ",";
+  }
+  command_with_id += "\"cmd_id\":";
+  command_with_id += String(static_cast<unsigned long>(cmd_id));
+  command_with_id += "}";
+  return true;
 }
 
-void setup() {
-  Serial.begin(SERIAL_BAUD);
-
-  const unsigned long serial_wait_start = millis();
-  while (!Serial && (millis() - serial_wait_start) < 2000UL) {
-    delay(10);
+bool ParseAckPacket(const String &text,
+                    uint32_t &cmd_id,
+                    bool &ack_success,
+                    String &reason) {
+  if (text.indexOf("\"type\":\"pid_tuning_ack\"") < 0) {
+    return false;
   }
 
-  Serial.println();
-  Serial.println("ESP32 LoRa telemetry receiver booting...");
-  Serial.printf("Expected payload size: %u bytes\n", static_cast<unsigned>(sizeof(TelemetryPacket)));
+  cmd_id = 0;
+  ack_success = text.indexOf("\"status\":\"ack\"") >= 0;
 
-  if (!InitLoRa()) {
-    Serial.println("LoRa init failed for all pin profiles.");
-    Serial.println("Check SX127x wiring, power, and reset/irq pins.");
-    while (true) {
-      delay(100);
+  const int cmd_id_key_index = text.indexOf("\"cmd_id\":");
+  if (cmd_id_key_index >= 0) {
+    int value_start = cmd_id_key_index + 9;
+    while (value_start < text.length() && text.charAt(value_start) == ' ') {
+      ++value_start;
+    }
+
+    int value_end = value_start;
+    while (value_end < text.length()) {
+      const char ch = text.charAt(value_end);
+      if (ch < '0' || ch > '9') {
+        break;
+      }
+      ++value_end;
+    }
+
+    if (value_end > value_start) {
+      cmd_id =
+          static_cast<uint32_t>(text.substring(value_start, value_end).toInt());
     }
   }
 
-  Serial.println("LoRa initialized. Waiting for telemetry packets...");
-  if (g_active_profile != nullptr) {
-    Serial.printf("Active profile: %s\n", g_active_profile->name);
+  reason = "unknown";
+  const int reason_key_index = text.indexOf("\"reason\":\"");
+  if (reason_key_index >= 0) {
+    const int reason_start = reason_key_index + 10;
+    const int reason_end = text.indexOf('"', reason_start);
+    if (reason_end > reason_start) {
+      reason = text.substring(reason_start, reason_end);
+    }
   }
-  PrintCommandHelp();
-  Serial.println();
+
+  return true;
 }
 
-void loop() {
-  HandleSerialCommandInput();
-
+bool ProcessOneIncomingPacketForAck(uint32_t expected_cmd_id,
+                                    bool &ack_matched,
+                                    bool &ack_success) {
   const int packet_size = LoRa.parsePacket();
   if (packet_size <= 0) {
-    delay(10);
-    return;
+    return false;
   }
 
   ++g_packet_counter;
@@ -313,34 +249,228 @@ void loop() {
     TelemetryPacket packet = {};
     memcpy(&packet, payload_buffer, sizeof(packet));
     PrintPacket(packet, LoRa.packetRssi(), LoRa.packetSnr());
-    return;
+    return true;
   }
 
   if (PacketLooksLikeText(payload_buffer, bytes_read)) {
     payload_buffer[bytes_read] = '\0';
+    const String text_payload =
+        String(reinterpret_cast<const char *>(payload_buffer));
+
+    uint32_t ack_cmd_id = 0;
+    bool parsed_ack_success = false;
+    String reason;
+    if (ParseAckPacket(text_payload, ack_cmd_id, parsed_ack_success, reason)) {
+      Serial.printf(
+          "[%lu] Flight ACK cmd_id=%lu status=%s reason=%s\n\n",
+          static_cast<unsigned long>(g_packet_counter),
+          static_cast<unsigned long>(ack_cmd_id),
+          parsed_ack_success ? "ack" : "nack",
+          reason.c_str());
+
+      if (expected_cmd_id != 0U &&
+          (ack_cmd_id == expected_cmd_id || ack_cmd_id == 0U)) {
+        ack_matched = true;
+        ack_success = parsed_ack_success;
+      }
+      return true;
+    }
+
     Serial.printf("[%lu] Text packet (%dB): %s\n\n",
                   static_cast<unsigned long>(g_packet_counter),
                   packet_size,
-                  reinterpret_cast<const char *>(payload_buffer));
+                  text_payload.c_str());
+    return true;
+  }
+
+  Serial.printf(
+      "[%lu] Unexpected packet size: %d bytes, expected %u\n",
+      static_cast<unsigned long>(g_packet_counter),
+      packet_size,
+      static_cast<unsigned>(sizeof(TelemetryPacket)));
+  DumpPacketHex(payload_buffer, bytes_read);
+  return true;
+}
+
+void SendCommandOverLoRa(const String &raw_command) {
+  uint32_t cmd_id = g_next_command_id++;
+  if (cmd_id == 0U) {
+    cmd_id = g_next_command_id++;
+  }
+
+  String command;
+  if (!BuildCommandWithId(raw_command, cmd_id, command)) {
+    Serial.println("TX reject: command must be a JSON object line.");
     return;
   }
 
-  if (packet_size != static_cast<int>(sizeof(TelemetryPacket))) {
+  if (command.length() > MAX_COMMAND_BYTES) {
     Serial.printf(
-        "[%lu] Unexpected packet size: %d bytes, expected %u bytes\n",
-        static_cast<unsigned long>(g_packet_counter),
-        packet_size,
-        static_cast<unsigned>(sizeof(TelemetryPacket)));
-    DumpPacketHex(payload_buffer, bytes_read);
+        "TX reject: command too long after cmd_id append (%u > %u bytes)\n",
+        static_cast<unsigned>(command.length()),
+        static_cast<unsigned>(MAX_COMMAND_BYTES));
     return;
   }
 
-  if (bytes_read != sizeof(TelemetryPacket)) {
-    Serial.printf(
-        "[%lu] Short read: got %u of %u bytes\n",
-        static_cast<unsigned long>(g_packet_counter),
-        static_cast<unsigned>(bytes_read),
-        static_cast<unsigned>(sizeof(TelemetryPacket)));
-    return;
+  for (uint8_t attempt = 1U; attempt <= COMMAND_MAX_RETRIES; ++attempt) {
+    const int begin_status = LoRa.beginPacket();
+    if (begin_status != 1) {
+      Serial.println("TX failed: LoRa.beginPacket() returned error");
+      delay(COMMAND_RETRY_GAP_MS);
+      continue;
+    }
+
+    const size_t written = LoRa.print(command);
+    const int end_status = LoRa.endPacket();
+    LoRa.receive();
+
+    if ((written != command.length()) || (end_status != 1)) {
+      Serial.printf("TX failed for cmd_id=%lu attempt %u/%u\n",
+                    static_cast<unsigned long>(cmd_id),
+                    static_cast<unsigned>(attempt),
+                    static_cast<unsigned>(COMMAND_MAX_RETRIES));
+      delay(COMMAND_RETRY_GAP_MS);
+      continue;
+    }
+
+    Serial.printf("TX cmd_id=%lu attempt %u/%u, waiting for flight ACK...\n",
+                  static_cast<unsigned long>(cmd_id),
+                  static_cast<unsigned>(attempt),
+                  static_cast<unsigned>(COMMAND_MAX_RETRIES));
+
+    bool ack_matched = false;
+    bool ack_success = false;
+    const unsigned long wait_start = millis();
+    while ((millis() - wait_start) < COMMAND_ACK_TIMEOUT_MS) {
+      const bool processed_packet =
+          ProcessOneIncomingPacketForAck(cmd_id, ack_matched, ack_success);
+      if (ack_matched) {
+        if (ack_success) {
+          Serial.printf("Command cmd_id=%lu confirmed by flight.\n\n",
+                        static_cast<unsigned long>(cmd_id));
+        } else {
+          Serial.printf("Command cmd_id=%lu rejected by flight.\n\n",
+                        static_cast<unsigned long>(cmd_id));
+        }
+        return;
+      }
+
+      if (!processed_packet) {
+        delay(10);
+      }
+    }
+
+    Serial.printf("No ACK yet for cmd_id=%lu after %lums.\n",
+                  static_cast<unsigned long>(cmd_id),
+                  static_cast<unsigned long>(COMMAND_ACK_TIMEOUT_MS));
+    delay(COMMAND_RETRY_GAP_MS);
+  }
+
+  Serial.printf("Command cmd_id=%lu failed: no flight ACK after %u attempts.\n\n",
+                static_cast<unsigned long>(cmd_id),
+                static_cast<unsigned>(COMMAND_MAX_RETRIES));
+}
+
+void HandleSerialCommandInput() {
+  while (Serial.available() > 0) {
+    const char ch = static_cast<char>(Serial.read());
+
+    if (ch == '\r') {
+      continue;
+    }
+
+    if (ch == '\n') {
+      g_pending_command.trim();
+
+      if (g_pending_command.length() > 0U) {
+        SendCommandOverLoRa(g_pending_command);
+      }
+
+      g_pending_command = "";
+      continue;
+    }
+
+    if (g_pending_command.length() < (MAX_COMMAND_BYTES + 16U)) {
+      g_pending_command += ch;
+    }
+  }
+}
+
+bool InitLoRa() {
+  Serial.printf(
+      "LoRa pins: SCK=%d MISO=%d MOSI=%d CS=%d RST=%d IRQ=%d\n",
+      SCK_PIN,
+      MISO_PIN,
+      MOSI_PIN,
+      CS_PIN,
+      RST_PIN,
+      IRQ_PIN);
+
+  LoRa.end();
+  SPI.end();
+  delay(20);
+
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS_PIN);
+  LoRa.setSPI(SPI);
+  LoRa.setSPIFrequency(LORA_SPI_FREQUENCY);
+  LoRa.setPins(CS_PIN, RST_PIN, IRQ_PIN);
+
+  if (!LoRa.begin(LORA_FREQ)) {
+    return false;
+  }
+
+  LoRa.setSyncWord(SYNC_WORD);
+  LoRa.setSpreadingFactor(SPREADING_FACTOR);
+  LoRa.receive();
+  return true;
+}
+
+void PrintCommandHelp() {
+  Serial.println("LoRa command TX enabled.");
+  Serial.println("Type one JSON object per line, then press Enter.");
+  Serial.println("Ground station auto-adds cmd_id and waits for flight ACK/NACK.");
+  Serial.println("Examples:");
+  Serial.println("  {\"axis\":\"roll\",\"kp\":18.5}");
+  Serial.println("  {\"axis\":\"roll\",\"kp\":18.5,\"ki\":0.02,\"kd\":0.12}");
+  Serial.println("  {\"pid\":{\"roll\":{\"kp\":19.0,\"ki\":0.01,\"kd\":0.10}}}");
+  Serial.println();
+}
+
+void setup() {
+  Serial.begin(SERIAL_BAUD);
+
+  const unsigned long serial_wait_start = millis();
+  while (!Serial && (millis() - serial_wait_start) < 2000UL) {
+    delay(10);
+  }
+
+  Serial.println();
+  Serial.println("ESP32 LoRa telemetry receiver booting...");
+  Serial.printf("Expected payload size: %u bytes\n",
+                static_cast<unsigned>(sizeof(TelemetryPacket)));
+
+  if (!InitLoRa()) {
+    Serial.println("LoRa init failed.");
+    Serial.println("Check SX127x wiring and try CS/SCK/MISO/MOSI pin remap.");
+    Serial.println("If wired, you can set RST_PIN and IRQ_PIN to real GPIO values.");
+    while (true) {
+      delay(100);
+    }
+  }
+
+  Serial.println("LoRa initialized. Waiting for telemetry packets...");
+  PrintCommandHelp();
+  Serial.println();
+}
+
+void loop() {
+  HandleSerialCommandInput();
+
+  bool ack_matched = false;
+  bool ack_success = false;
+  const bool processed_packet =
+      ProcessOneIncomingPacketForAck(0, ack_matched, ack_success);
+  if (!processed_packet) {
+    delay(10);
   }
 }
