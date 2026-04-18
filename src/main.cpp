@@ -239,6 +239,11 @@ void TaskFlightControl(void *pvParameters) {
 }
 
 void TaskTelemetryTx(void *pvParameters) {
+    if (!LORA_LOGGING_ENABLED) {
+        vTaskDelete(NULL);
+        return;
+    }
+
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
@@ -291,8 +296,13 @@ void setup() {
     GPS_Init();
     navigation.restart_mission();
 
-    if (!lora_init()) {
-        Serial.println("LoRa init failed.");
+    if (LORA_LOGGING_ENABLED) {        
+        if (!lora_init()) {
+            Serial.println("LoRa init failed.");
+        }
+    }
+    else {
+        Serial.println("LoRa Logging Disabled by config.");
     }
 
     if (SD_LOGGING_ENABLED) {
@@ -305,6 +315,9 @@ void setup() {
             // so the logging task will safely do nothing.
             Serial.println("SD Card Init Failed. Logging will be disabled.");
         }
+    }
+    else {
+        Serial.println("SD Logging Disabled by config.");
     }
 
     xTaskCreatePinnedToCore(

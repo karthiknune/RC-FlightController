@@ -10,6 +10,7 @@
 
 
 // LoRa-------------
+constexpr bool LORA_LOGGING_ENABLED = true;
 // LoRa SPI pins
 constexpr int SCK_PIN = 5;
 constexpr int MOSI_PIN = 19;
@@ -55,7 +56,7 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 //IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
@@ -68,8 +69,8 @@ constexpr float IMU_MAG_OFFSET_Y = 0.0f;
 constexpr float IMU_MAG_OFFSET_Z = 0.0f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
-constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = true;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
@@ -85,14 +86,11 @@ constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea lev
 constexpr int I2C_SDA_PIN = 22;
 constexpr int I2C_SCL_PIN = 20;
 constexpr uint32_t I2C_BUS_FREQUENCY_HZ = 400000UL;
-// I2C-------------
-
-// Sensor bus / recovery-------------
 constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 20;
 constexpr int SENSOR_I2C_LOCK_TIMEOUT_MS = 20;
 constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
 constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
-// Sensor bus / recovery-------------
+// I2C-------------
 
 
 // Control-------------
