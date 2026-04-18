@@ -282,6 +282,12 @@ void TaskSDLog(void *pvParameters) {
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
+
+    // Shared SPI bus safety: deselect peripherals before driver init.
+    pinMode(CS_PIN, OUTPUT);
+    digitalWrite(CS_PIN, HIGH);
+    pinMode(SD_CS, OUTPUT);
+    digitalWrite(SD_CS, HIGH);
     
     if (!SensorBus_Init()) {
         Serial.println("Sensor I2C bus init failed.");

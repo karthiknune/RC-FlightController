@@ -22,6 +22,9 @@ constexpr int IRQ_PIN = 14;
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
+// Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
+constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
+constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 50;
 constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
 constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
 constexpr int TELEMETRY_TASK_PRIORITY = 1;
