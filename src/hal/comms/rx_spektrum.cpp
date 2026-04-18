@@ -7,7 +7,7 @@ float raw_aileron_pwm = 1500;
 float raw_elevator_pwm = 1500;
 float raw_rudder_pwm = 1500;
 float raw_throttle_pwm = 1000;
-float raw_flightmode_pwm = 1900;
+float raw_flightmode_pwm = 1300;
 
 RCData rc_data; ////global variable to hold the latest RC data read from the receiver
 
@@ -18,7 +18,7 @@ void rx_init() {
     rc_data.elevator_pwm = 1500.0f;
     rc_data.throttle_pwm = 1000.0f; 
     rc_data.rudder_pwm = 1500.0f;
-    rc_data.flightmode_pwm = 1100.0f; //default manual
+    rc_data.flightmode_pwm = 1300.0f; //default manual
     rc_data.healthy = false;
 
 }

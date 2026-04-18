@@ -7,6 +7,7 @@
 #include "hal/comms/rx_spektrum.h"
 #include "flight/home.h"
 #include "math/utils.h"
+#include <Arduino.h>
 
 extern PIDController roll_pid;
 extern PIDController pitch_pid;
@@ -34,6 +35,13 @@ void mode_waypoint_run(){
             roll_pid.compute(0.0f, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
         const float level_pitch_output =
             pitch_pid.compute(2.0f, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+
+        if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
+            Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
+                          target_roll,
+                          imu_data.roll,
+                          level_roll_output);
+        }
 
         motormixer_compute(throttle_output, level_roll_output, level_pitch_output, 0.0f);
         return;
@@ -64,6 +72,13 @@ void mode_waypoint_run(){
         roll_pid.compute(desired_roll, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
     const float pitch_output =
         pitch_pid.compute(desired_pitch, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+
+    if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
+                      desired_roll,
+                      imu_data.roll,
+                      roll_output);
+    }
 
     motormixer_compute(throttle_output, roll_output, pitch_output, 0.0f);
 }

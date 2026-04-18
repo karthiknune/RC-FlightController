@@ -8,6 +8,7 @@
 #include "flight/home.h"
 #include "math/utils.h"
 #include "config.h"
+#include <Arduino.h>
 
 
 extern IMUData_filtered imu_data;
@@ -47,6 +48,13 @@ void mode_alt_hold_run(){
     float roll = roll_pid.compute(des_roll,  actual_roll, flight_control_dt_seconds);
     float pitch = pitch_pid.compute(des_pitch, actual_pitch, flight_control_dt_seconds);
     float throttle = des_throttle;
+
+    if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
+                      des_roll,
+                      actual_roll,
+                      roll);
+    }
 
     motormixer_compute(throttle, roll, pitch, 0.0f);
 

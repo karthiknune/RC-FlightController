@@ -1,5 +1,12 @@
 //////// config file for all pin assignments, tuning parameters and other constants
 
+
+// RX_Throttle INPUT_PIN 37    // D37
+// RX_Rudder INPUT_PIN 33     // D33  
+// RX Elevator INPUT_PIN 32    // D32
+// RX_Mode INPUT_PIN 15       // D15
+
+
 #pragma once
 #include <cstdint>
 
@@ -16,9 +23,9 @@ constexpr int SCK_PIN = 5;
 constexpr int MOSI_PIN = 19;
 constexpr int MISO_PIN = 21;
 // LoRa control pins
-constexpr int CS_PIN = 27;
-constexpr int RST_PIN = 32;
-constexpr int IRQ_PIN = 14;
+constexpr int CS_PIN = 26; // Connected to A0
+constexpr int RST_PIN = 4;  // Connected to A5
+constexpr int IRQ_PIN = 39;  // Connected to A3
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
@@ -32,7 +39,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 // LoRa-------------
 
 // SD Card Logger-------------
-constexpr bool SD_LOGGING_ENABLED = true;
+constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
@@ -40,7 +47,7 @@ constexpr int SD_LOG_TASK_CORE = 1;
 constexpr uint8_t SD_SCK = 5;
 constexpr uint8_t SD_MOSI = 19;
 constexpr uint8_t SD_MISO = 21;
-constexpr uint8_t SD_CS = 4;   // Connected to A5
+constexpr uint8_t SD_CS = 25;   // Connected to A1
 // SD Card Logger-------------
 
 // GPS-------------
@@ -56,6 +63,7 @@ constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
 constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
 //IMU-------------
@@ -117,8 +125,8 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 #define esc_pin 13
 #define aileron_pin 12
-#define elevator_pin 33
-#define rudder_pin 15
+#define elevator_pin 27
+#define rudder_pin 14
 
 //channels
 
@@ -127,6 +135,8 @@ const int aileron_channel = 1;
 const int elevator_channel = 2;
 const int rudder_channel = 3;
 
+//PWM limits needed for hardware interfacing and safety
+
 //Limits
 
 const float max_roll_angle = 45.0f; 
@@ -134,13 +144,13 @@ const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 
 ///tuning parameters
-const float roll_kp = 1.0f;
+const float roll_kp = 20.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
 const float max_roll_output = 500.0f;
 const float max_roll_integral = 200.0f;
 
-const float pitch_kp = 1.0f;
+const float pitch_kp = 20.0f;
 const float pitch_ki = 0.0f;
 const float pitch_kd = 0.1f;
 const float max_pitch_output = 500.0f;
