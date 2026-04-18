@@ -12,6 +12,7 @@
 #include "hal/comms/rx_spektrum.h"
 #include "hal/actuators/pwm_out.h"
 #include "flight/telemetry.h"
+#include "flight/pid_tuning.h"
 #include "logging/sd_logger.h"
 #include "nav/waypoint.h"
 #include "flight/home.h"
@@ -279,6 +280,45 @@ void TaskSDLog(void *pvParameters) {
     }
 }
 
+void TaskPIDConfigRefresh(void *pvParameters) {
+    if (!PID_TUNING_ENABLED) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(PID_TUNING_REFRESH_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        (void)PIDTuning_LoadFromSDAndApply();
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskPIDConfigRx(void *pvParameters) {
+    if (!PID_TUNING_ENABLED || !LORA_LOGGING_ENABLED) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    uint8_t packet_buffer[PID_TUNING_LORA_MAX_PAYLOAD_BYTES];
+
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(PID_TUNING_LORA_POLL_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        const size_t bytes_read =
+            lora_receive(packet_buffer, sizeof(packet_buffer));
+        if (bytes_read > 0) {
+            (void)PIDTuning_ApplyLoRaUpdate(packet_buffer, bytes_read);
+        }
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
@@ -311,19 +351,28 @@ void setup() {
         Serial.println("LoRa Logging Disabled by config.");
     }
 
-    if (SD_LOGGING_ENABLED) {
-        if (SD_Logger_Init()) {
+    const bool sd_required = SD_LOGGING_ENABLED ||
+                             (PID_TUNING_ENABLED && PID_TUNING_PERSIST_TO_SD);
+    if (sd_required) {
+        if (!SD_Logger_Init()) {
+            // If init fails, logger and PID config persistence will safely no-op.
+            Serial.println("SD Card Init Failed. SD-backed features disabled.");
+        } else if (SD_LOGGING_ENABLED) {
             if (SD_Logger_CreateNewLog()) {
                 SD_Logger_WriteHeader();
             }
-        } else {
-            // If init fails, the logger functions have checks for a valid file handle,
-            // so the logging task will safely do nothing.
-            Serial.println("SD Card Init Failed. Logging will be disabled.");
         }
-    }
-    else {
+    } else {
         Serial.println("SD Logging Disabled by config.");
+    }
+
+    if (PID_TUNING_ENABLED) {
+        PIDTuning_Init();
+        if (PIDTuning_LoadFromSDAndApply()) {
+            Serial.println("PID tuning: loaded parameters from SD.");
+        } else {
+            Serial.println("PID tuning: using current in-memory defaults.");
+        }
     }
 
     xTaskCreatePinnedToCore(
@@ -385,6 +434,28 @@ void setup() {
             SD_LOG_TASK_PRIORITY,
             NULL,
             SD_LOG_TASK_CORE
+        );
+    }
+
+    if (PID_TUNING_ENABLED) {
+        xTaskCreatePinnedToCore(
+            TaskPIDConfigRefresh,
+            "PID_Config_Refresh",
+            PID_TUNING_REFRESH_TASK_STACK_SIZE,
+            NULL,
+            PID_TUNING_REFRESH_TASK_PRIORITY,
+            NULL,
+            PID_TUNING_REFRESH_TASK_CORE
+        );
+
+        xTaskCreatePinnedToCore(
+            TaskPIDConfigRx,
+            "PID_Config_Rx",
+            PID_TUNING_RX_TASK_STACK_SIZE,
+            NULL,
+            PID_TUNING_RX_TASK_PRIORITY,
+            NULL,
+            PID_TUNING_RX_TASK_CORE
         );
     }
 }

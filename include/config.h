@@ -118,6 +118,24 @@ constexpr int FLIGHT_CONTROL_TASK_PERIOD_MS = 100;
 constexpr int FLIGHT_CONTROL_TASK_STACK_SIZE = 4096;
 constexpr int FLIGHT_CONTROL_TASK_PRIORITY = 1;
 constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
+
+// In-flight PID tuning (JSON + LoRa)
+constexpr bool PID_TUNING_ENABLED = true;
+constexpr bool PID_TUNING_PERSIST_TO_SD = true;
+constexpr uint32_t PID_TUNING_REFRESH_PERIOD_MS = 30000UL;
+constexpr uint32_t PID_TUNING_LORA_POLL_PERIOD_MS = 50UL;
+constexpr int PID_TUNING_REFRESH_TASK_STACK_SIZE = 4096;
+constexpr int PID_TUNING_REFRESH_TASK_PRIORITY = 1;
+constexpr int PID_TUNING_REFRESH_TASK_CORE = 1;
+constexpr int PID_TUNING_RX_TASK_STACK_SIZE = 4096;
+constexpr int PID_TUNING_RX_TASK_PRIORITY = 1;
+constexpr int PID_TUNING_RX_TASK_CORE = 1;
+constexpr uint16_t PID_TUNING_JSON_DOC_CAPACITY = 2048;
+constexpr uint16_t PID_TUNING_LORA_MAX_PAYLOAD_BYTES = 240;
+constexpr bool PID_TUNING_PRINT_SD_VALUES_ON_READ = true;
+constexpr bool PID_TUNING_COMPACT_SD_LOG = true;
+constexpr char PID_TUNING_FILE_PATH[] = "/pid_config.json";
+constexpr char PID_TUNING_TEMP_FILE_PATH[] = "/pid_config.tmp";
 // Control-------------
 
 
@@ -136,6 +154,19 @@ const int elevator_channel = 2;
 const int rudder_channel = 3;
 
 //PWM limits needed for hardware interfacing and safety
+constexpr uint16_t PWM_ESC_MIN_US = 1000;
+constexpr uint16_t PWM_ESC_MAX_US = 2000;
+constexpr uint16_t PWM_SURFACE_MIN_US = 1000;
+constexpr uint16_t PWM_SURFACE_MAX_US = 2000;
+
+// Control-surface angle mapping (degrees) corresponding to PWM_SURFACE_* endpoints.
+constexpr float SURFACE_MIN_ANGLE_DEG = -90.0f;
+constexpr float SURFACE_MAX_ANGLE_DEG = 90.0f;
+constexpr float SURFACE_NEUTRAL_ANGLE_DEG = 0.0f;
+
+// Control-surface sweep behavior during pwm_reset().
+constexpr uint16_t PWM_RESET_SWEEP_STEP_US = 10;
+constexpr uint16_t PWM_RESET_SWEEP_DELAY_MS = 15;
 
 //Limits
 

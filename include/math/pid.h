@@ -6,9 +6,14 @@ class PIDController {
         float compute(float setpoint, float measured_value, float dt); //compute pid output
         void PIDreset();
 
+        void setTunings(float kp, float ki, float kd);
+        void setLimits(float max_output, float max_integral);
+
         float getkp(); 
         float getki();
         float getkd();
+        float getMaxOutput();
+        float getMaxIntegral();
     
     private:
         //tuning params

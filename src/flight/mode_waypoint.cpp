@@ -38,7 +38,7 @@ void mode_waypoint_run(){
 
         if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
             Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
-                          target_roll,
+                          0.0f,
                           imu_data.roll,
                           level_roll_output);
         }

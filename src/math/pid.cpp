@@ -45,6 +45,22 @@ void PIDController::PIDreset() {  //call before every controlled flight
     integral = 0.0;
 }
 
+void PIDController::setTunings(float kp, float ki, float kd) {
+    this->kp = kp;
+    this->ki = ki;
+    this->kd = kd;
+}
+
+void PIDController::setLimits(float max_output, float max_integral) {
+    if (max_output > 0.0f) {
+        this->max_output = max_output;
+    }
+
+    if (max_integral >= 0.0f) {
+        this->max_integral = max_integral;
+    }
+}
+
 
 //telemetry getters
 float PIDController::getkp() {
@@ -57,5 +73,13 @@ float PIDController::getki() {
 
 float PIDController::getkd() {
     return kd;
+}
+
+float PIDController::getMaxOutput() {
+    return max_output;
+}
+
+float PIDController::getMaxIntegral() {
+    return max_integral;
 }
 

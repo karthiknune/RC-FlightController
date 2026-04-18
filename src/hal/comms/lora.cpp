@@ -76,6 +76,7 @@ bool lora_init() {
 
   LoRa.setSpreadingFactor(7);
   LoRa.setSyncWord(SYNC_WORD);
+  LoRa.receive();
   SPIBus_Unlock();
   give_lora_lock();
   g_lora_ready = true;
@@ -98,6 +99,7 @@ bool lora_send(const uint8_t *data, size_t length) {
   const size_t bytes_written =
       (begin_result == 1) ? LoRa.write(data, length) : 0;
   const int end_result = (begin_result == 1) ? LoRa.endPacket() : 0;
+  LoRa.receive();
 
   SPIBus_Unlock();
   give_lora_lock();
