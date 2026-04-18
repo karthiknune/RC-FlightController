@@ -11,6 +11,7 @@ namespace {
 
 SemaphoreHandle_t g_lora_mutex = nullptr;
 bool g_lora_ready = false;
+uint32_t g_last_diag_log_ms = 0;
 
 bool take_lora_lock() {
   return (g_lora_mutex != nullptr) &&
@@ -25,6 +26,32 @@ void give_lora_lock() {
 
 bool take_spi_lock() {
   return SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS));
+}
+
+void log_lora_diag_throttled(const char *operation, const char *message) {
+  const uint32_t now_ms = millis();
+  if ((now_ms - g_last_diag_log_ms) < LORA_LOCK_DIAG_PRINT_INTERVAL_MS) {
+    return;
+  }
+
+  g_last_diag_log_ms = now_ms;
+  Serial.printf("LoRa %s: %s\n", operation, message);
+}
+
+bool take_spi_lock_with_retry(const char *operation) {
+  for (int attempt = 0; attempt <= LORA_SPI_LOCK_RETRY_COUNT; ++attempt) {
+    if (take_spi_lock()) {
+      return true;
+    }
+
+    if (attempt < LORA_SPI_LOCK_RETRY_COUNT &&
+        LORA_SPI_LOCK_RETRY_DELAY_MS > 0UL) {
+      delay(LORA_SPI_LOCK_RETRY_DELAY_MS);
+    }
+  }
+
+  log_lora_diag_throttled(operation, "timed out waiting for SPI lock");
+  return false;
 }
 
 void deselect_sd() {
@@ -54,7 +81,7 @@ bool lora_init() {
     return false;
   }
 
-  if (!take_spi_lock()) {
+  if (!take_spi_lock_with_retry("init")) {
     give_lora_lock();
     return false;
   }
@@ -74,8 +101,17 @@ bool lora_init() {
     return false;
   }
 
+  LoRa.setTxPower(LORA_TX_POWER_DBM);
+  LoRa.setSignalBandwidth(LORA_SIGNAL_BANDWIDTH_HZ);
+  LoRa.setCodingRate4(LORA_CODING_RATE_DENOM);
+  LoRa.setPreambleLength(LORA_PREAMBLE_LENGTH);
   LoRa.setSpreadingFactor(7);
   LoRa.setSyncWord(SYNC_WORD);
+  if (LORA_ENABLE_CRC) {
+    LoRa.enableCrc();
+  } else {
+    LoRa.disableCrc();
+  }
   LoRa.receive();
   SPIBus_Unlock();
   give_lora_lock();
@@ -88,7 +124,7 @@ bool lora_send(const uint8_t *data, size_t length) {
     return false;
   }
 
-  if (!take_spi_lock()) {
+  if (!take_spi_lock_with_retry("tx")) {
     give_lora_lock();
     return false;
   }
@@ -100,6 +136,12 @@ bool lora_send(const uint8_t *data, size_t length) {
       (begin_result == 1) ? LoRa.write(data, length) : 0;
   const int end_result = (begin_result == 1) ? LoRa.endPacket() : 0;
   LoRa.receive();
+
+  if (begin_result != 1) {
+    log_lora_diag_throttled("tx", "LoRa.beginPacket() failed");
+  } else if (bytes_written != length || end_result != 1) {
+    log_lora_diag_throttled("tx", "incomplete packet write or endPacket() failed");
+  }
 
   SPIBus_Unlock();
   give_lora_lock();
@@ -119,7 +161,7 @@ size_t lora_receive(uint8_t *buffer, size_t max_length) {
     return 0;
   }
 
-  if (!take_spi_lock()) {
+  if (!take_spi_lock_with_retry("rx")) {
     give_lora_lock();
     return 0;
   }
@@ -128,6 +170,8 @@ size_t lora_receive(uint8_t *buffer, size_t max_length) {
 
   const int packet_size = LoRa.parsePacket();
   if (packet_size <= 0) {
+    // Keep radio in continuous RX between polling cycles.
+    LoRa.receive();
     SPIBus_Unlock();
     give_lora_lock();
     return 0;
@@ -141,6 +185,9 @@ size_t lora_receive(uint8_t *buffer, size_t max_length) {
   while (LoRa.available()) {
     (void)LoRa.read();
   }
+
+  // Return to continuous RX immediately after packet handling.
+  LoRa.receive();
 
   SPIBus_Unlock();
   give_lora_lock();

@@ -17,7 +17,8 @@
 
 
 // LoRa-------------
-constexpr bool LORA_LOGGING_ENABLED = true;
+constexpr bool LORA_LOGGING_ENABLED = false;
+constexpr bool LORA_TUNING_ENABLED = true;  //  works alongwith PID_TUNING_ENABLED to receive PID updates over LoRa
 // LoRa SPI pins
 constexpr int SCK_PIN = 5;
 constexpr int MOSI_PIN = 19;
@@ -29,10 +30,20 @@ constexpr int IRQ_PIN = 39;  // Connected to A3
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
+constexpr int LORA_TX_POWER_DBM = 10;
+constexpr long LORA_SIGNAL_BANDWIDTH_HZ = 125000L;
+constexpr int LORA_CODING_RATE_DENOM = 5;
+constexpr long LORA_PREAMBLE_LENGTH = 8;
+constexpr bool LORA_ENABLE_CRC = true;
 // Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
-constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
-constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 50;
+constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 2000000UL;
+constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 250;
+constexpr int LORA_SPI_LOCK_RETRY_COUNT = 3;
+constexpr uint32_t LORA_SPI_LOCK_RETRY_DELAY_MS = 3UL;
+constexpr uint32_t LORA_LOCK_DIAG_PRINT_INTERVAL_MS = 1000UL;
 constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
+constexpr uint32_t PID_TUNING_TELEMETRY_MIN_PERIOD_MS = 900UL;
+constexpr uint32_t PID_TUNING_TELEMETRY_TX_JITTER_MS = 80UL;
 constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
 constexpr int TELEMETRY_TASK_PRIORITY = 1;
 constexpr int TELEMETRY_TASK_CORE = 1;
@@ -121,21 +132,13 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 // In-flight PID tuning (JSON + LoRa)
 constexpr bool PID_TUNING_ENABLED = true;
-constexpr bool PID_TUNING_PERSIST_TO_SD = true;
-constexpr uint32_t PID_TUNING_REFRESH_PERIOD_MS = 30000UL;
-constexpr uint32_t PID_TUNING_LORA_POLL_PERIOD_MS = 50UL;
-constexpr int PID_TUNING_REFRESH_TASK_STACK_SIZE = 4096;
-constexpr int PID_TUNING_REFRESH_TASK_PRIORITY = 1;
-constexpr int PID_TUNING_REFRESH_TASK_CORE = 1;
+constexpr uint32_t PID_TUNING_LORA_POLL_PERIOD_MS = 10UL;
 constexpr int PID_TUNING_RX_TASK_STACK_SIZE = 4096;
-constexpr int PID_TUNING_RX_TASK_PRIORITY = 1;
+constexpr int PID_TUNING_RX_TASK_PRIORITY = 2;
 constexpr int PID_TUNING_RX_TASK_CORE = 1;
 constexpr uint16_t PID_TUNING_JSON_DOC_CAPACITY = 2048;
 constexpr uint16_t PID_TUNING_LORA_MAX_PAYLOAD_BYTES = 240;
-constexpr bool PID_TUNING_PRINT_SD_VALUES_ON_READ = true;
-constexpr bool PID_TUNING_COMPACT_SD_LOG = true;
-constexpr char PID_TUNING_FILE_PATH[] = "/pid_config.json";
-constexpr char PID_TUNING_TEMP_FILE_PATH[] = "/pid_config.tmp";
+constexpr uint32_t PID_TUNING_TELEMETRY_HOLDOFF_MS = 700UL;
 // Control-------------
 
 

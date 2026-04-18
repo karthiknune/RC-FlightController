@@ -93,6 +93,37 @@ struct telemetrydata{
     int waypoint_index;
     int waypoint_total;
     int waypoint_mission_complete;
+
+    // Live PID tuning snapshot (RAM state, sent over LoRa telemetry).
+    float pid_roll_kp;
+    float pid_roll_ki;
+    float pid_roll_kd;
+    float pid_roll_max_output;
+    float pid_roll_max_integral;
+
+    float pid_pitch_kp;
+    float pid_pitch_ki;
+    float pid_pitch_kd;
+    float pid_pitch_max_output;
+    float pid_pitch_max_integral;
+
+    float pid_yaw_kp;
+    float pid_yaw_ki;
+    float pid_yaw_kd;
+    float pid_yaw_max_output;
+    float pid_yaw_max_integral;
+
+    float pid_altitude_kp;
+    float pid_altitude_ki;
+    float pid_altitude_kd;
+    float pid_altitude_max_output;
+    float pid_altitude_max_integral;
+
+    float pid_headingerror_kp;
+    float pid_headingerror_ki;
+    float pid_headingerror_kd;
+    float pid_headingerror_max_output;
+    float pid_headingerror_max_integral;
 };
 
 

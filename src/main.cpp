@@ -161,6 +161,37 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.waypoint_total = navigation.get_total_waypoint_count();
     snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
 
+    // Live PID values (RAM state) for ground-station visibility over LoRa.
+    snapshot.pid_roll_kp = roll_pid.getkp();
+    snapshot.pid_roll_ki = roll_pid.getki();
+    snapshot.pid_roll_kd = roll_pid.getkd();
+    snapshot.pid_roll_max_output = roll_pid.getMaxOutput();
+    snapshot.pid_roll_max_integral = roll_pid.getMaxIntegral();
+
+    snapshot.pid_pitch_kp = pitch_pid.getkp();
+    snapshot.pid_pitch_ki = pitch_pid.getki();
+    snapshot.pid_pitch_kd = pitch_pid.getkd();
+    snapshot.pid_pitch_max_output = pitch_pid.getMaxOutput();
+    snapshot.pid_pitch_max_integral = pitch_pid.getMaxIntegral();
+
+    snapshot.pid_yaw_kp = yaw_pid.getkp();
+    snapshot.pid_yaw_ki = yaw_pid.getki();
+    snapshot.pid_yaw_kd = yaw_pid.getkd();
+    snapshot.pid_yaw_max_output = yaw_pid.getMaxOutput();
+    snapshot.pid_yaw_max_integral = yaw_pid.getMaxIntegral();
+
+    snapshot.pid_altitude_kp = altitude_pid.getkp();
+    snapshot.pid_altitude_ki = altitude_pid.getki();
+    snapshot.pid_altitude_kd = altitude_pid.getkd();
+    snapshot.pid_altitude_max_output = altitude_pid.getMaxOutput();
+    snapshot.pid_altitude_max_integral = altitude_pid.getMaxIntegral();
+
+    snapshot.pid_headingerror_kp = headingerror_pid.getkp();
+    snapshot.pid_headingerror_ki = headingerror_pid.getki();
+    snapshot.pid_headingerror_kd = headingerror_pid.getkd();
+    snapshot.pid_headingerror_max_output = headingerror_pid.getMaxOutput();
+    snapshot.pid_headingerror_max_integral = headingerror_pid.getMaxIntegral();
+
     if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
         snapshot.waypoint_target_lat =
             static_cast<float>(missionwaypoints[snapshot.waypoint_index].lat);
@@ -245,14 +276,45 @@ void TaskTelemetryTx(void *pvParameters) {
         return;
     }
 
-    TickType_t xLastWakeTime;
-    const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
-    xLastWakeTime = xTaskGetTickCount();
+    uint32_t telemetry_send_failures = 0;
 
     for (;;) {
+        if (PID_TUNING_ENABLED && PIDTuning_ShouldHoldTelemetryTx()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
         const telemetrydata snapshot = BuildTelemetrySnapshot();
-        (void)telemetry_send(snapshot);
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        if (!telemetry_send(snapshot)) {
+            ++telemetry_send_failures;
+            if (telemetry_send_failures == 1 ||
+                (telemetry_send_failures % 20U) == 0U) {
+                Serial.printf(
+                    "Telemetry TX warning: LoRa send failed (%lu failures).\n",
+                    static_cast<unsigned long>(telemetry_send_failures));
+            }
+        } else {
+            telemetry_send_failures = 0;
+        }
+
+        uint32_t tx_period_ms = TELEMETRY_TASK_PERIOD_MS;
+        if (PID_TUNING_ENABLED &&
+            PID_TUNING_TELEMETRY_MIN_PERIOD_MS > tx_period_ms) {
+            tx_period_ms = PID_TUNING_TELEMETRY_MIN_PERIOD_MS;
+        }
+
+        if (PID_TUNING_ENABLED && PID_TUNING_TELEMETRY_TX_JITTER_MS > 0UL) {
+            const long jitter =
+                random(-static_cast<long>(PID_TUNING_TELEMETRY_TX_JITTER_MS),
+                       static_cast<long>(PID_TUNING_TELEMETRY_TX_JITTER_MS) + 1L);
+            const long jittered_period =
+                static_cast<long>(tx_period_ms) + jitter;
+            tx_period_ms = static_cast<uint32_t>((jittered_period < 50L)
+                                                     ? 50L
+                                                     : jittered_period);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(tx_period_ms));
     }
 }
 
@@ -280,24 +342,8 @@ void TaskSDLog(void *pvParameters) {
     }
 }
 
-void TaskPIDConfigRefresh(void *pvParameters) {
-    if (!PID_TUNING_ENABLED) {
-        vTaskDelete(NULL);
-        return;
-    }
-
-    TickType_t xLastWakeTime;
-    const TickType_t xFrequency = pdMS_TO_TICKS(PID_TUNING_REFRESH_PERIOD_MS);
-    xLastWakeTime = xTaskGetTickCount();
-
-    for (;;) {
-        (void)PIDTuning_LoadFromSDAndApply();
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-    }
-}
-
 void TaskPIDConfigRx(void *pvParameters) {
-    if (!PID_TUNING_ENABLED || !LORA_LOGGING_ENABLED) {
+    if (!PID_TUNING_ENABLED || !LORA_TUNING_ENABLED) {
         vTaskDelete(NULL);
         return;
     }
@@ -312,6 +358,8 @@ void TaskPIDConfigRx(void *pvParameters) {
         const size_t bytes_read =
             lora_receive(packet_buffer, sizeof(packet_buffer));
         if (bytes_read > 0) {
+            Serial.printf("PID tuning: LoRa packet received (%u bytes).\n",
+                          static_cast<unsigned>(bytes_read));
             (void)PIDTuning_ApplyLoRaUpdate(packet_buffer, bytes_read);
         }
 
@@ -322,6 +370,7 @@ void TaskPIDConfigRx(void *pvParameters) {
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
+    randomSeed(static_cast<unsigned long>(micros()));
 
     // Shared SPI bus safety: deselect peripherals before driver init.
     pinMode(CS_PIN, OUTPUT);
@@ -342,20 +391,21 @@ void setup() {
     GPS_Init();
     navigation.restart_mission();
 
-    if (LORA_LOGGING_ENABLED) {        
+    if (LORA_LOGGING_ENABLED || LORA_TUNING_ENABLED) {        
         if (!lora_init()) {
             Serial.println("LoRa init failed.");
         }
+        else {
+            Serial.println("LoRa initialized successfully.");
+        }
     }
     else {
-        Serial.println("LoRa Logging Disabled by config.");
+        Serial.println("LoRa Logging and Tuning Disabled by config.");
     }
 
-    const bool sd_required = SD_LOGGING_ENABLED ||
-                             (PID_TUNING_ENABLED && PID_TUNING_PERSIST_TO_SD);
-    if (sd_required) {
+    if (SD_LOGGING_ENABLED) {
         if (!SD_Logger_Init()) {
-            // If init fails, logger and PID config persistence will safely no-op.
+            // If init fails, CSV logging will safely no-op.
             Serial.println("SD Card Init Failed. SD-backed features disabled.");
         } else if (SD_LOGGING_ENABLED) {
             if (SD_Logger_CreateNewLog()) {
@@ -368,12 +418,12 @@ void setup() {
 
     if (PID_TUNING_ENABLED) {
         PIDTuning_Init();
-        if (PIDTuning_LoadFromSDAndApply()) {
-            Serial.println("PID tuning: loaded parameters from SD.");
-        } else {
-            Serial.println("PID tuning: using current in-memory defaults.");
-        }
+        Serial.println("PID tuning: RAM-only mode; initialized from config.h defaults.");
     }
+    else {
+        Serial.println("PID tuning: disabled by config.");
+    }
+
 
     xTaskCreatePinnedToCore(
         TaskIMURead,
@@ -438,16 +488,6 @@ void setup() {
     }
 
     if (PID_TUNING_ENABLED) {
-        xTaskCreatePinnedToCore(
-            TaskPIDConfigRefresh,
-            "PID_Config_Refresh",
-            PID_TUNING_REFRESH_TASK_STACK_SIZE,
-            NULL,
-            PID_TUNING_REFRESH_TASK_PRIORITY,
-            NULL,
-            PID_TUNING_REFRESH_TASK_CORE
-        );
-
         xTaskCreatePinnedToCore(
             TaskPIDConfigRx,
             "PID_Config_Rx",

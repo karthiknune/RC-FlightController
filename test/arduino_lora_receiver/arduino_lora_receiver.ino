@@ -25,14 +25,21 @@ constexpr int IRQ_PIN = 2;
 constexpr long LORA_FREQ = 915E6;
 constexpr uint8_t SYNC_WORD = 0xF3;
 constexpr int SPREADING_FACTOR = 7;
+constexpr int LORA_TX_POWER_DBM = 10;
+constexpr long LORA_SIGNAL_BANDWIDTH_HZ = 125000L;
+constexpr int LORA_CODING_RATE_DENOM = 5;
+constexpr long LORA_PREAMBLE_LENGTH = 8;
+constexpr bool LORA_ENABLE_CRC = true;
 constexpr long LORA_SPI_FREQUENCY = 2000000L;
 
 constexpr unsigned long SERIAL_BAUD = 115200UL;
 constexpr size_t MAX_COMMAND_BYTES = 240U;
 constexpr size_t MAX_RX_PACKET_BYTES = 255U;
-constexpr uint8_t COMMAND_MAX_RETRIES = 4U;
-constexpr uint32_t COMMAND_ACK_TIMEOUT_MS = 1200UL;
-constexpr uint32_t COMMAND_RETRY_GAP_MS = 120UL;
+constexpr uint8_t COMMAND_MAX_RETRIES = 8U;
+constexpr uint32_t COMMAND_ACK_TIMEOUT_MS = 1600UL;
+constexpr uint32_t COMMAND_RETRY_GAP_MIN_MS = 90UL;
+constexpr uint32_t COMMAND_RETRY_GAP_MAX_MS = 260UL;
+constexpr uint32_t COMMAND_PRE_TX_IDLE_MS = 120UL;
 
 struct TelemetryPacket {
   float roll;
@@ -67,13 +74,44 @@ struct TelemetryPacket {
   int32_t waypoint_index;
   int32_t waypoint_total;
   int32_t waypoint_mission_complete;
+
+  float pid_roll_kp;
+  float pid_roll_ki;
+  float pid_roll_kd;
+  float pid_roll_max_output;
+  float pid_roll_max_integral;
+
+  float pid_pitch_kp;
+  float pid_pitch_ki;
+  float pid_pitch_kd;
+  float pid_pitch_max_output;
+  float pid_pitch_max_integral;
+
+  float pid_yaw_kp;
+  float pid_yaw_ki;
+  float pid_yaw_kd;
+  float pid_yaw_max_output;
+  float pid_yaw_max_integral;
+
+  float pid_altitude_kp;
+  float pid_altitude_ki;
+  float pid_altitude_kd;
+  float pid_altitude_max_output;
+  float pid_altitude_max_integral;
+
+  float pid_headingerror_kp;
+  float pid_headingerror_ki;
+  float pid_headingerror_kd;
+  float pid_headingerror_max_output;
+  float pid_headingerror_max_integral;
 };
 
-static_assert(sizeof(TelemetryPacket) == 128, "Telemetry packet size mismatch");
+static_assert(sizeof(TelemetryPacket) == 228, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
 uint32_t g_next_command_id = 1;
 String g_pending_command;
+uint32_t g_last_rx_packet_ms = 0;
 
 void DumpPacketHex(const uint8_t *data, size_t length) {
   Serial.println("Raw payload:");
@@ -143,6 +181,22 @@ void PrintPacket(const TelemetryPacket &packet, int rssi, float snr) {
       static_cast<long>(packet.waypoint_index),
       static_cast<long>(packet.waypoint_total),
       static_cast<long>(packet.waypoint_mission_complete));
+
+  Serial.printf(
+      "PID      R(%.3f,%.3f,%.3f) P(%.3f,%.3f,%.3f) Y(%.3f,%.3f,%.3f) A(%.3f,%.3f,%.3f) H(%.3f,%.3f,%.3f)\n",
+      packet.pid_roll_kp, packet.pid_roll_ki, packet.pid_roll_kd,
+      packet.pid_pitch_kp, packet.pid_pitch_ki, packet.pid_pitch_kd,
+      packet.pid_yaw_kp, packet.pid_yaw_ki, packet.pid_yaw_kd,
+      packet.pid_altitude_kp, packet.pid_altitude_ki, packet.pid_altitude_kd,
+      packet.pid_headingerror_kp, packet.pid_headingerror_ki, packet.pid_headingerror_kd);
+
+  Serial.printf(
+      "PID Lim  R(%.1f,%.1f) P(%.1f,%.1f) Y(%.1f,%.1f) A(%.1f,%.1f) H(%.1f,%.1f)\n",
+      packet.pid_roll_max_output, packet.pid_roll_max_integral,
+      packet.pid_pitch_max_output, packet.pid_pitch_max_integral,
+      packet.pid_yaw_max_output, packet.pid_yaw_max_integral,
+      packet.pid_altitude_max_output, packet.pid_altitude_max_integral,
+      packet.pid_headingerror_max_output, packet.pid_headingerror_max_integral);
 
   Serial.println();
 }
@@ -231,6 +285,7 @@ bool ProcessOneIncomingPacketForAck(uint32_t expected_cmd_id,
     return false;
   }
 
+  g_last_rx_packet_ms = millis();
   ++g_packet_counter;
 
   uint8_t payload_buffer[MAX_RX_PACKET_BYTES + 1U] = {};
@@ -313,10 +368,24 @@ void SendCommandOverLoRa(const String &raw_command) {
   }
 
   for (uint8_t attempt = 1U; attempt <= COMMAND_MAX_RETRIES; ++attempt) {
+    // Wait for a brief quiet window after the latest downlink packet.
+    while ((millis() - g_last_rx_packet_ms) < COMMAND_PRE_TX_IDLE_MS) {
+      bool ignore_ack = false;
+      bool ignore_success = false;
+      if (!ProcessOneIncomingPacketForAck(0U, ignore_ack, ignore_success)) {
+        delay(5);
+      }
+    }
+
     const int begin_status = LoRa.beginPacket();
     if (begin_status != 1) {
       Serial.println("TX failed: LoRa.beginPacket() returned error");
-      delay(COMMAND_RETRY_GAP_MS);
+      const uint32_t retry_gap_ms =
+          COMMAND_RETRY_GAP_MIN_MS +
+          static_cast<uint32_t>(
+              random(static_cast<long>(COMMAND_RETRY_GAP_MAX_MS -
+                                       COMMAND_RETRY_GAP_MIN_MS + 1UL)));
+      delay(retry_gap_ms);
       continue;
     }
 
@@ -329,7 +398,12 @@ void SendCommandOverLoRa(const String &raw_command) {
                     static_cast<unsigned long>(cmd_id),
                     static_cast<unsigned>(attempt),
                     static_cast<unsigned>(COMMAND_MAX_RETRIES));
-      delay(COMMAND_RETRY_GAP_MS);
+      const uint32_t retry_gap_ms =
+          COMMAND_RETRY_GAP_MIN_MS +
+          static_cast<uint32_t>(
+              random(static_cast<long>(COMMAND_RETRY_GAP_MAX_MS -
+                                       COMMAND_RETRY_GAP_MIN_MS + 1UL)));
+      delay(retry_gap_ms);
       continue;
     }
 
@@ -363,7 +437,12 @@ void SendCommandOverLoRa(const String &raw_command) {
     Serial.printf("No ACK yet for cmd_id=%lu after %lums.\n",
                   static_cast<unsigned long>(cmd_id),
                   static_cast<unsigned long>(COMMAND_ACK_TIMEOUT_MS));
-    delay(COMMAND_RETRY_GAP_MS);
+    const uint32_t retry_gap_ms =
+        COMMAND_RETRY_GAP_MIN_MS +
+        static_cast<uint32_t>(
+            random(static_cast<long>(COMMAND_RETRY_GAP_MAX_MS -
+                                     COMMAND_RETRY_GAP_MIN_MS + 1UL)));
+    delay(retry_gap_ms);
   }
 
   Serial.printf("Command cmd_id=%lu failed: no flight ACK after %u attempts.\n\n",
@@ -419,8 +498,17 @@ bool InitLoRa() {
     return false;
   }
 
+  LoRa.setTxPower(LORA_TX_POWER_DBM);
+  LoRa.setSignalBandwidth(LORA_SIGNAL_BANDWIDTH_HZ);
+  LoRa.setCodingRate4(LORA_CODING_RATE_DENOM);
+  LoRa.setPreambleLength(LORA_PREAMBLE_LENGTH);
   LoRa.setSyncWord(SYNC_WORD);
   LoRa.setSpreadingFactor(SPREADING_FACTOR);
+  if (LORA_ENABLE_CRC) {
+    LoRa.enableCrc();
+  } else {
+    LoRa.disableCrc();
+  }
   LoRa.receive();
   return true;
 }
@@ -438,6 +526,7 @@ void PrintCommandHelp() {
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
+  randomSeed(static_cast<unsigned long>(micros()));
 
   const unsigned long serial_wait_start = millis();
   while (!Serial && (millis() - serial_wait_start) < 2000UL) {

@@ -2,15 +2,12 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <SD.h>
-#include <SPI.h>
 
 #include <math.h>
 #include <string.h>
 
 #include "config.h"
 #include "hal/comms/lora.h"
-#include "hal/comms/spi_bus.h"
 #include "math/pid.h"
 
 extern PIDController roll_pid;
@@ -40,7 +37,20 @@ struct PIDRuntimeConfig {
 
 PIDRuntimeConfig g_pid_config = {};
 bool g_pid_config_initialized = false;
-bool g_sd_ready = false;
+volatile uint32_t g_telemetry_holdoff_until_ms = 0;
+uint32_t g_last_non_json_rx_log_ms = 0;
+
+bool telemetry_holdoff_active(uint32_t now_ms) {
+    return static_cast<int32_t>(g_telemetry_holdoff_until_ms - now_ms) > 0;
+}
+
+void refresh_telemetry_holdoff_window() {
+    if (PID_TUNING_TELEMETRY_HOLDOFF_MS == 0UL) {
+        return;
+    }
+
+    g_telemetry_holdoff_until_ms = millis() + PID_TUNING_TELEMETRY_HOLDOFF_MS;
+}
 
 bool payload_looks_like_json(const uint8_t *data, size_t length) {
     if (data == nullptr || length == 0) {
@@ -179,95 +189,6 @@ void apply_runtime_config(const PIDRuntimeConfig &config, bool reset_integral_st
     apply_axis_config(headingerror_pid, config.headingerror, reset_integral_state);
 }
 
-void print_axis_config(const char *axis_name, const PIDAxisConfig &axis) {
-    Serial.printf(
-        "PID[%s] kp=%.4f ki=%.4f kd=%.4f max_output=%.2f max_integral=%.2f\n",
-        axis_name,
-        axis.kp,
-        axis.ki,
-        axis.kd,
-        axis.max_output,
-        axis.max_integral);
-}
-
-void print_runtime_config(const PIDRuntimeConfig &config) {
-    if (PID_TUNING_COMPACT_SD_LOG) {
-        Serial.printf(
-            "PID tuning: SD read v=%lu | R(%.3f,%.3f,%.3f,%.1f,%.1f) P(%.3f,%.3f,%.3f,%.1f,%.1f) Y(%.3f,%.3f,%.3f,%.1f,%.1f) A(%.3f,%.3f,%.3f,%.1f,%.1f) H(%.3f,%.3f,%.3f,%.1f,%.1f)\n",
-            static_cast<unsigned long>(config.version),
-            config.roll.kp,
-            config.roll.ki,
-            config.roll.kd,
-            config.roll.max_output,
-            config.roll.max_integral,
-            config.pitch.kp,
-            config.pitch.ki,
-            config.pitch.kd,
-            config.pitch.max_output,
-            config.pitch.max_integral,
-            config.yaw.kp,
-            config.yaw.ki,
-            config.yaw.kd,
-            config.yaw.max_output,
-            config.yaw.max_integral,
-            config.altitude.kp,
-            config.altitude.ki,
-            config.altitude.kd,
-            config.altitude.max_output,
-            config.altitude.max_integral,
-            config.headingerror.kp,
-            config.headingerror.ki,
-            config.headingerror.kd,
-            config.headingerror.max_output,
-            config.headingerror.max_integral);
-        return;
-    }
-
-    Serial.printf("PID tuning: SD config read (version=%lu)\n",
-                  static_cast<unsigned long>(config.version));
-    print_axis_config("roll", config.roll);
-    print_axis_config("pitch", config.pitch);
-    print_axis_config("yaw", config.yaw);
-    print_axis_config("altitude", config.altitude);
-    print_axis_config("headingerror", config.headingerror);
-}
-
-void prepare_shared_spi_for_sd() {
-    pinMode(CS_PIN, OUTPUT);
-    digitalWrite(CS_PIN, HIGH);
-
-    pinMode(SD_CS, OUTPUT);
-    digitalWrite(SD_CS, HIGH);
-
-    SPI.begin(SD_SCK, SD_MISO, SD_MOSI, -1);
-}
-
-bool lock_sd_bus() {
-    if (!SPIBus_Init()) {
-        return false;
-    }
-
-    if (!SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
-        return false;
-    }
-
-    prepare_shared_spi_for_sd();
-
-    if (!g_sd_ready) {
-        g_sd_ready = SD.begin(SD_CS, SPI, SPI_BUS_FREQUENCY_HZ);
-        if (!g_sd_ready) {
-            SPIBus_Unlock();
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void unlock_sd_bus() {
-    SPIBus_Unlock();
-}
-
 bool update_axis_from_object(JsonObjectConst object,
                              PIDAxisConfig &axis,
                              bool &changed) {
@@ -397,63 +318,6 @@ bool merge_json_into_config(JsonObjectConst root,
     return recognized_any_field;
 }
 
-void write_axis_json(JsonObject parent,
-                     const char *axis_name,
-                     const PIDAxisConfig &axis) {
-    JsonObject target = parent.createNestedObject(axis_name);
-    target["kp"] = axis.kp;
-    target["ki"] = axis.ki;
-    target["kd"] = axis.kd;
-    target["max_output"] = axis.max_output;
-    target["max_integral"] = axis.max_integral;
-}
-
-void write_config_json(DynamicJsonDocument &doc, const PIDRuntimeConfig &config) {
-    doc.clear();
-    doc["version"] = config.version;
-
-    JsonObject pid = doc.createNestedObject("pid");
-    write_axis_json(pid, "roll", config.roll);
-    write_axis_json(pid, "pitch", config.pitch);
-    write_axis_json(pid, "yaw", config.yaw);
-    write_axis_json(pid, "altitude", config.altitude);
-    write_axis_json(pid, "headingerror", config.headingerror);
-}
-
-bool save_config_locked(const PIDRuntimeConfig &config) {
-    DynamicJsonDocument doc(PID_TUNING_JSON_DOC_CAPACITY);
-    write_config_json(doc, config);
-
-    if (SD.exists(PID_TUNING_TEMP_FILE_PATH)) {
-        SD.remove(PID_TUNING_TEMP_FILE_PATH);
-    }
-
-    File temp_file = SD.open(PID_TUNING_TEMP_FILE_PATH, FILE_WRITE);
-    if (!temp_file) {
-        return false;
-    }
-
-    const size_t bytes = serializeJsonPretty(doc, temp_file);
-    temp_file.flush();
-    temp_file.close();
-
-    if (bytes == 0) {
-        SD.remove(PID_TUNING_TEMP_FILE_PATH);
-        return false;
-    }
-
-    if (SD.exists(PID_TUNING_FILE_PATH)) {
-        SD.remove(PID_TUNING_FILE_PATH);
-    }
-
-    if (!SD.rename(PID_TUNING_TEMP_FILE_PATH, PID_TUNING_FILE_PATH)) {
-        SD.remove(PID_TUNING_TEMP_FILE_PATH);
-        return false;
-    }
-
-    return true;
-}
-
 } // namespace
 
 void PIDTuning_Init() {
@@ -464,88 +328,6 @@ void PIDTuning_Init() {
     load_default_config(g_pid_config);
     apply_runtime_config(g_pid_config, false);
     g_pid_config_initialized = true;
-}
-
-bool PIDTuning_LoadFromSDAndApply() {
-    if (!PID_TUNING_ENABLED) {
-        return false;
-    }
-
-    if (!g_pid_config_initialized) {
-        PIDTuning_Init();
-    }
-
-    if (!lock_sd_bus()) {
-        return false;
-    }
-
-    File config_file = SD.open(PID_TUNING_FILE_PATH, FILE_READ);
-    if (!config_file) {
-        const bool defaults_saved = save_config_locked(g_pid_config);
-        unlock_sd_bus();
-        return defaults_saved;
-    }
-
-    DynamicJsonDocument doc(PID_TUNING_JSON_DOC_CAPACITY);
-    DeserializationError error = deserializeJson(doc, config_file);
-    config_file.close();
-    unlock_sd_bus();
-
-    if (error) {
-        Serial.print("PID tuning: JSON parse failed: ");
-        Serial.println(error.c_str());
-        return false;
-    }
-
-    if (!doc.is<JsonObjectConst>()) {
-        Serial.println("PID tuning: JSON root must be an object.");
-        return false;
-    }
-
-    PIDRuntimeConfig next = g_pid_config;
-    bool changed = false;
-    if (!merge_json_into_config(doc.as<JsonObjectConst>(), next, changed)) {
-        Serial.println("PID tuning: JSON did not contain recognized PID fields.");
-        return false;
-    }
-
-    if (!runtime_config_is_valid(next)) {
-        Serial.println("PID tuning: rejected SD config due to invalid limits.");
-        return false;
-    }
-
-    if (PID_TUNING_PRINT_SD_VALUES_ON_READ) {
-        // Print parsed SD values on every successful JSON read.
-        print_runtime_config(next);
-    }
-
-    g_pid_config = next;
-    if (changed) {
-        apply_runtime_config(g_pid_config, true);
-        Serial.printf("PID tuning: applied SD update (version=%lu).\n",
-                      static_cast<unsigned long>(g_pid_config.version));
-    }
-
-    return true;
-}
-
-bool PIDTuning_SaveCurrentToSD() {
-    if (!PID_TUNING_ENABLED || !PID_TUNING_PERSIST_TO_SD) {
-        return false;
-    }
-
-    if (!g_pid_config_initialized) {
-        PIDTuning_Init();
-    }
-
-    if (!lock_sd_bus()) {
-        return false;
-    }
-
-    const bool saved = save_config_locked(g_pid_config);
-    unlock_sd_bus();
-
-    return saved;
 }
 
 bool PIDTuning_ApplyLoRaUpdate(const uint8_t *data, size_t length) {
@@ -560,8 +342,20 @@ bool PIDTuning_ApplyLoRaUpdate(const uint8_t *data, size_t length) {
 
     if (!payload_looks_like_json(data, length)) {
         // Ignore non-JSON packets (such as unrelated radio traffic).
+        const uint32_t now_ms = millis();
+        if ((now_ms - g_last_non_json_rx_log_ms) > 1000UL) {
+            g_last_non_json_rx_log_ms = now_ms;
+            Serial.printf(
+                "PID tuning: ignored non-JSON LoRa payload (len=%u, first=0x%02X 0x%02X).\n",
+                static_cast<unsigned>(length),
+                static_cast<unsigned>(length > 0 ? data[0] : 0U),
+                static_cast<unsigned>(length > 1 ? data[1] : 0U));
+        }
         return false;
     }
+
+    // Give LoRa command/ACK exchange temporary priority over telemetry TX.
+    refresh_telemetry_holdoff_window();
 
     char payload[PID_TUNING_LORA_MAX_PAYLOAD_BYTES + 1];
     memcpy(payload, data, length);
@@ -617,12 +411,13 @@ bool PIDTuning_ApplyLoRaUpdate(const uint8_t *data, size_t length) {
                   static_cast<unsigned long>(g_pid_config.version));
 
     send_tuning_ack("ack", "applied", g_pid_config.version, true, cmd_id);
+    return true;
+}
 
-    if (PID_TUNING_PERSIST_TO_SD) {
-        if (!PIDTuning_SaveCurrentToSD()) {
-            Serial.println("PID tuning: warning, failed to persist config to SD.");
-        }
+bool PIDTuning_ShouldHoldTelemetryTx() {
+    if (!PID_TUNING_ENABLED || PID_TUNING_TELEMETRY_HOLDOFF_MS == 0UL) {
+        return false;
     }
 
-    return true;
+    return telemetry_holdoff_active(millis());
 }
