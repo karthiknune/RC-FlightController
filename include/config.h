@@ -40,6 +40,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 
 // SD Card Logger-------------
 constexpr bool SD_LOGGING_ENABLED = false;
+constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
@@ -80,6 +81,8 @@ constexpr float IMU_MAG_OFFSET_Y = 0.0f;
 constexpr float IMU_MAG_OFFSET_Z = 0.0f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
