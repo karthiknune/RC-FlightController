@@ -16,11 +16,15 @@ namespace
 
     constexpr uint8_t kIMUAddress = ICM20948_I2CADDR_DEFAULT;
     constexpr float kRadToDeg = 57.2957795f;
-    constexpr float kComplementaryFilterGyroWeight = 0.98f;
-    constexpr float kComplementaryFilterAccelWeight = 0.02f;
-    constexpr float kComplementaryFilterMagWeight = 0.02f;
+    constexpr float kFilterTimeConstantXY = 0.5f; // Seconds to trust gyro over accel
+    constexpr float kFilterTimeConstantZ = 0.5f;  // Seconds to trust gyro over mag
 
     uint32_t g_last_time_us = 0;
+    uint32_t g_last_mag_time_us = 0;
+    float g_last_mag_x = 0.0f;
+    float g_last_mag_y = 0.0f;
+    float g_last_mag_z = 0.0f;
+
     uint32_t g_last_init_attempt_ms = 0;
     bool g_imu_ready = false;
     bool g_imu_missing_logged = false;
@@ -50,6 +54,10 @@ namespace
     void ResetOrientationState()
     {
         g_last_time_us = 0;
+        g_last_mag_time_us = 0;
+        g_last_mag_x = 0.0f;
+        g_last_mag_y = 0.0f;
+        g_last_mag_z = 0.0f;
         g_orientation_seeded = false;
         g_roll_deg = 0.0f;
         g_pitch_deg = 0.0f;
@@ -112,31 +120,56 @@ namespace
         const float mag_y_h = data.mag_y * cos_roll - data.mag_z * sin_roll;
         const float mag_heading = atan2f(-mag_y_h, mag_x_h) * 180.0f / PI;
 
+        const bool mag_is_fresh = (data.mag_x != g_last_mag_x || data.mag_y != g_last_mag_y || data.mag_z != g_last_mag_z);
+
         if (!g_orientation_seeded || dt <= 0.0f || dt > 0.5f)
         {
             g_roll_deg = accel_roll;
             g_pitch_deg = accel_pitch;
             g_yaw_deg = mag_heading;
             g_orientation_seeded = true;
+
+            g_last_mag_time_us = now_us;
+            g_last_mag_x = data.mag_x;
+            g_last_mag_y = data.mag_y;
+            g_last_mag_z = data.mag_z;
         }
         else
         {
-            g_roll_deg = (kComplementaryFilterGyroWeight * (g_roll_deg + (data.gyro_x * dt))) +
-                         (kComplementaryFilterAccelWeight * accel_roll);
-            g_pitch_deg = (kComplementaryFilterGyroWeight * (g_pitch_deg + (data.gyro_y * dt))) +
-                          (kComplementaryFilterAccelWeight * accel_pitch);
+            // Dynamic filter weights based on actual loop time
+            const float alpha_xy = kFilterTimeConstantXY / (kFilterTimeConstantXY + dt);
 
-            // Yaw complementary filter
+            g_roll_deg = (alpha_xy * (g_roll_deg + (data.gyro_x * dt))) +
+                         ((1.0f - alpha_xy) * accel_roll);
+            g_pitch_deg = (alpha_xy * (g_pitch_deg + (data.gyro_y * dt))) +
+                          ((1.0f - alpha_xy) * accel_pitch);
+
+            // Integrate gyro yaw every loop
             g_yaw_deg += data.gyro_z * dt;
             g_yaw_deg = WrapAngle180(g_yaw_deg);
 
-            const float yaw_error = WrapAngle180(mag_heading - g_yaw_deg);
-            g_yaw_deg = WrapAngle180(g_yaw_deg + (kComplementaryFilterMagWeight * yaw_error));
+            // Only pull towards compass when fresh data arrives
+            if (mag_is_fresh)
+            {
+                const float mag_dt = (g_last_mag_time_us != 0) ? (static_cast<float>(now_us - g_last_mag_time_us) / 1000000.0f) : 0.0f;
+                g_last_mag_time_us = now_us;
+                g_last_mag_x = data.mag_x;
+                g_last_mag_y = data.mag_y;
+                g_last_mag_z = data.mag_z;
+
+                if (mag_dt > 0.0f)
+                {
+                    const float alpha_z = kFilterTimeConstantZ / (kFilterTimeConstantZ + mag_dt);
+                    const float yaw_error = WrapAngle180(mag_heading - g_yaw_deg);
+                    g_yaw_deg = WrapAngle180(g_yaw_deg + ((1.0f - alpha_z) * yaw_error));
+                }
+            }
         }
 
         data.roll = g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG;
         data.pitch = g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG;
-        // data.yaw = g_yaw_deg;
+
+        data.yaw = g_yaw_deg;
     }
 
     void UpdateIMUAvailability(bool available)
@@ -242,9 +275,9 @@ bool IMU_Calibrate_Gyro()
 
     Serial.println("Calibrating gyroscope... Keep the aircraft still.");
 
-    float sum_gx = 0.0f;
-    float sum_gy = 0.0f;
-    float sum_gz = 0.0f;
+    double sum_gx = 0.0;
+    double sum_gy = 0.0;
+    double sum_gz = 0.0;
     int captured_samples = 0;
 
     for (int sample_index = 0; sample_index < IMU_GYRO_CALIBRATION_SAMPLES; ++sample_index)
@@ -260,9 +293,9 @@ bool IMU_Calibrate_Gyro()
             continue;
         }
 
-        sum_gx += ApplyBodyFrameAxis(g.gyro.x * kRadToDeg, IMU_BODY_FRAME_X_SIGN);
-        sum_gy += ApplyBodyFrameAxis(g.gyro.y * kRadToDeg, IMU_BODY_FRAME_Y_SIGN);
-        sum_gz += ApplyBodyFrameAxis(g.gyro.z * kRadToDeg, IMU_BODY_FRAME_Z_SIGN);
+        sum_gx += static_cast<double>(ApplyBodyFrameAxis(g.gyro.x * kRadToDeg, IMU_BODY_FRAME_X_SIGN));
+        sum_gy += static_cast<double>(ApplyBodyFrameAxis(g.gyro.y * kRadToDeg, IMU_BODY_FRAME_Y_SIGN));
+        sum_gz += static_cast<double>(ApplyBodyFrameAxis(g.gyro.z * kRadToDeg, IMU_BODY_FRAME_Z_SIGN));
         ++captured_samples;
 
         delay(IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS);
@@ -274,9 +307,9 @@ bool IMU_Calibrate_Gyro()
         return false;
     }
 
-    g_gyro_bias_x_dps = sum_gx / static_cast<float>(captured_samples);
-    g_gyro_bias_y_dps = sum_gy / static_cast<float>(captured_samples);
-    g_gyro_bias_z_dps = sum_gz / static_cast<float>(captured_samples);
+    g_gyro_bias_x_dps = static_cast<float>(sum_gx / captured_samples);
+    g_gyro_bias_y_dps = static_cast<float>(sum_gy / captured_samples);
+    g_gyro_bias_z_dps = static_cast<float>(sum_gz / captured_samples);
     ResetOrientationState();
 
     Serial.printf(
@@ -310,8 +343,8 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
         delay(1000);
     }
 
-    float sum_roll = 0.0f;
-    float sum_pitch = 0.0f;
+    double sum_roll = 0.0;
+    double sum_pitch = 0.0;
     int captured_samples = 0;
 
     Serial.println("Recording samples...");
@@ -325,8 +358,8 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
             continue;
         }
 
-        sum_roll += g_roll_deg;
-        sum_pitch += g_pitch_deg;
+        sum_roll += static_cast<double>(g_roll_deg);
+        sum_pitch += static_cast<double>(g_pitch_deg);
         ++captured_samples;
 
         if ((sample_index + 1) % 50 == 0)
@@ -344,8 +377,8 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
         return false;
     }
 
-    roll_offset_deg = sum_roll / static_cast<float>(captured_samples);
-    pitch_offset_deg = sum_pitch / static_cast<float>(captured_samples);
+    roll_offset_deg = static_cast<float>(sum_roll / captured_samples);
+    pitch_offset_deg = static_cast<float>(sum_pitch / captured_samples);
 
     Serial.println();
     Serial.println();
