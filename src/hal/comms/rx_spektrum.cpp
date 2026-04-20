@@ -1,22 +1,17 @@
 #include "hal/comms/rx_spektrum.h"
 #include "config.h"
+#include "math/utils.h"
 
-/// TODO: delete after writing rx_read()
-float raw_aileron_pwm = 1500;
-float raw_elevator_pwm = 1500;
-float raw_rudder_pwm = 1500;
-float raw_throttle_pwm = 1000;
-float raw_flightmode_pwm = 1900;
 
 RCData rc_data; ////global variable to hold the latest RC data read from the receiver
 
 void rx_init() {
     ////kens code
     ///defaults..will be overwritten by rx_read()
-    rc_data.aileron_pwm = 1500.0f;
-    rc_data.elevator_pwm = 1500.0f;
-    rc_data.throttle_pwm = 1000.0f; 
-    rc_data.rudder_pwm = 1500.0f;
+    rc_data.aileron_pwm = aileron_int;
+    rc_data.elevator_pwm = elevator_int;
+    rc_data.throttle_pwm = throttle_int;
+    rc_data.rudder_pwm = rudder_int;
     rc_data.flightmode_pwm = 1100.0f; //default manual
     rc_data.healthy = false;
 
@@ -33,14 +28,8 @@ void rx_read() {
 }
 
 float rx_to_angle(float raw_pwm, float max_angle){
-    if (raw_pwm<1000)
-    {
-        raw_pwm = 1000;
-    }
-    else if (raw_pwm > 2000)
-    {
-        raw_pwm = 2000;
-    }
+    
+    raw_pwm = math::clamp_value(raw_pwm, 1000.0f, 2000.0f);
     return ((raw_pwm-1500.0f)/500.0f) * max_angle;
     
 }
