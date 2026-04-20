@@ -40,7 +40,6 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 
 // SD Card Logger-------------
 constexpr bool SD_LOGGING_ENABLED = false;
-constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
@@ -81,8 +80,6 @@ constexpr float IMU_MAG_OFFSET_Y = 0.0f;
 constexpr float IMU_MAG_OFFSET_Z = 0.0f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
-constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
@@ -138,7 +135,42 @@ const int aileron_channel = 1;
 const int elevator_channel = 2;
 const int rudder_channel = 3;
 
+//pwm settings
+const int pwm_freq = 50; // 50 Hz for standard servos
+const int pwm_resolution = 16; // 16-bit resolution for finer control
+
+
 //PWM limits needed for hardware interfacing and safety
+
+//esc/throttle
+constexpr float throttle_slope = 10.0f;   // 10 us per percent throttle
+constexpr int throttle_int = 1000; ///1000 microseconds corresponds to 0% throttle
+constexpr int throttle_safe = 500; //to cutoff esc
+
+//aileron
+constexpr float aileron_slope = 10.0f;   // microsseconds per degree of deflection
+constexpr int aileron_int = 1500; // 1500 microseconds corresponds to neutral posi (0 degrees) deflection
+
+//elevator
+constexpr float elevator_slope = 10.0f;   
+constexpr int elevator_int = 1500; 
+
+// rudder
+constexpr float rudder_slope = 10.0f;
+constexpr int rudder_int = 1500;
+
+//PWM limits--------------------
+
+
+//Control Surface Hardware Limits
+constexpr float aileron_max_deflection_deg = 30.0f; /// maximum deflection in degrees for aileron
+constexpr float aileron_min_deflection_deg = -30.0f;   // minimum deflection in degrees for aileron
+constexpr float elevator_max_deflection_deg = 30.0f;
+constexpr float elevator_min_deflection_deg = -30.0f; 
+constexpr float rudder_max_deflection_deg = 30.0f;   
+constexpr float rudder_min_deflection_deg = -30.0f; 
+//control surface hardware limits--------------------
+
 
 //Limits
 
