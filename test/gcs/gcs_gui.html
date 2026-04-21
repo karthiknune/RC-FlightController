@@ -587,13 +587,6 @@ function App() {
           </div>
         </div>
 
-        {/* Mode */}
-        <div style={{ paddingRight:14, borderRight:`1px solid ${T.border}`, marginRight:14 }}>
-          <div style={{ background:tm.mode?modeColor+'22':'transparent', color:tm.mode?modeColor:T.textDim, border:`1px solid ${tm.mode?modeColor+'55':T.border}`, font:'bold 11px Space Mono', padding:'4px 12px', borderRadius:4, letterSpacing:'0.05em' }}>
-            {tm.mode ?? ' MODE'}
-          </div>
-        </div>
-
         {/* Arm status */}
         <div style={{ paddingRight:14, borderRight:`1px solid ${T.border}`, marginRight:14 }}>
           <div style={{
@@ -603,6 +596,13 @@ function App() {
             font:'bold 11px Space Mono', padding:'4px 12px', borderRadius:4, letterSpacing:'0.05em'
           }}>
             {!tm.connected ? 'ARM STATUS' : tm.armed ? 'ARMED' : 'DISARMED'}
+          </div>
+        </div>
+
+        {/* Mode */}
+        <div style={{ paddingRight:14, borderRight:`1px solid ${T.border}`, marginRight:14 }}>
+          <div style={{ background:tm.mode?modeColor+'22':'transparent', color:tm.mode?modeColor:T.textDim, border:`1px solid ${tm.mode?modeColor+'55':T.border}`, font:'bold 11px Space Mono', padding:'4px 12px', borderRadius:4, letterSpacing:'0.05em' }}>
+            {tm.mode ?? ' FLIGHT MODE'}
           </div>
         </div>
 
@@ -752,8 +752,8 @@ function App() {
           </Card>
           <Card>
             <SH label="System" />
-            <Row label="Mode"        value={tm.mode}                                    mono={false} />
             <Row label="Arm Status" value={!tm.connected ? 'ARM STATUS' : tm.armed ? 'ARMED' : 'DISARMED'} mono={false} warn={tm.connected && tm.armed} />
+            <Row label="Mode"        value={tm.mode}                                    mono={false} />
             <Row label="Failsafe"    value={tm.connected?(tm.failsafe?'ACTIVE':'OK'):null} mono={false} warn={tm.failsafe} />
             <Row label="Battery"     value={fmt2(tm.vbat)}                              unit="V"   warn={batWarn} crit={batCrit} />
             <Row label="Capacity"    value={tm.batPct!=null?`${Math.round(tm.batPct)}%`:null} warn={batWarn} crit={batCrit} />
