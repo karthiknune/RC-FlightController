@@ -84,6 +84,9 @@ constexpr float IMU_MAG_SCALE_Z =  0.959f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+// Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
+// If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
+// IMU_RUN_STARTUP_LEVEL_CALIBRATION false.
 constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
 constexpr bool IMU_RUN_MAG_CALIBRATION = false;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
