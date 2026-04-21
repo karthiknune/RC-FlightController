@@ -309,6 +309,9 @@ void setup() {
         if (!lora_init()) {
             Serial.println("LoRa init failed.");
         }
+        else {
+            Serial.println("LoRa init successful.");
+        }
     }
     else {
         Serial.println("LoRa Logging Disabled by config.");

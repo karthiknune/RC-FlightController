@@ -39,7 +39,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 // LoRa-------------
 
 // SD Card Logger-------------
-constexpr bool SD_LOGGING_ENABLED = false;
+constexpr bool SD_LOGGING_ENABLED = true;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
@@ -67,7 +67,7 @@ constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
 // IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
