@@ -17,7 +17,7 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Area | Status | Notes |
 | --- | --- | --- |
 | Board support | Implemented | `adafruit_feather_esp32_v2` via PlatformIO |
-| IMU | Implemented | ICM-20948 over shared I2C, complementary filter for roll/pitch, gyro and level calibration helpers |
+| IMU | Implemented | ICM-20948 over shared I2C, complementary filter for roll/pitch/yaw (tilt-compensated magnetometer fusion), gyro/level/magnetometer calibration helpers |
 | Barometer | Implemented | BMP3XX over I2C |
 | GPS | Implemented | UART2 parser for GGA and RMC sentences |
 | Waypoint navigation | Implemented | Haversine distance, bearing, leg and mission progress |
@@ -98,7 +98,7 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 
 | Task | Period | Purpose |
 | --- | --- | --- |
-| `TaskIMURead` | `10 ms` | Reads ICM-20948 and updates filtered roll/pitch |
+| `TaskIMURead` | `10 ms` | Reads ICM-20948 and updates filtered roll/pitch/yaw |
 | `TaskBarometerRead` | `50 ms` | Reads barometer pressure and altitude |
 | `TaskGPSRead` | `50 ms` | Parses incoming GPS NMEA stream and updates navigation |
 | `TaskFlightControl` | `100 ms` | Reads RC input, selects flight mode, runs active mode |
@@ -136,9 +136,16 @@ The IMU path also now includes:
 - magnetometer reads stored in `IMUData_raw`
 - gyro bias calibration via `IMU_Calibrate_Gyro()`
 - level calibration helper via `IMU_Run_Level_Calibration(...)`
+- magnetometer hard/soft iron calibration helper via `IMU_Run_Mag_Calibration(...)`
 - startup calibration flags in `include/config.h`, disabled by default
 
-Current yaw is still not coming from tilt-compensated magnetometer fusion or an AHRS yaw estimator. The IMU currently provides roll and pitch only. The filtered `imu_data.yaw` is updated from `gps_data.heading` when a valid GPS lock exists and the aircraft is moving faster than `WAYPOINT_MIN_GROUND_SPEED_MPS`. If that GPS condition is not met, yaw is not recomputed from the IMU and simply retains its previous value.
+Yaw is estimated in the IMU path using gyro integration plus tilt-compensated magnetometer correction. This means `imu_data.yaw` is available without requiring GPS lock. GPS heading remains available as a separate navigation signal (`gps_data.heading`) and is still used by waypoint logic where appropriate.
+
+Magnetometer calibration parameters now live in `include/config.h`:
+
+- `IMU_MAG_OFFSET_X`, `IMU_MAG_OFFSET_Y`, `IMU_MAG_OFFSET_Z`
+- `IMU_MAG_SCALE_X`, `IMU_MAG_SCALE_Y`, `IMU_MAG_SCALE_Z`
+- `IMU_RUN_MAG_CALIBRATION` startup flag
 
 ### Barometer
 
@@ -391,7 +398,7 @@ Key groups:
 - waypoint mission list
 - GPS timezone offset
 - LoRa settings
-- IMU body-frame signs, level offsets, and calibration flags
+- IMU body-frame signs, magnetometer offsets/scales, level offsets, and startup calibration flags
 
 ## Current Limitations
 
@@ -404,7 +411,6 @@ Known limitations:
 - failsafe logic is incomplete
 - telemetry RX command protocol is not implemented yet
 - telemetry uses raw binary struct layout instead of a stable serialized protocol
-- magnetometer data is read but not yet fused into yaw estimation
 - yaw control is not actively used in waypoint steering
 - no persistent configuration or parameter storage yet
 
@@ -422,7 +428,7 @@ Known limitations:
 ## [next steps/TODO]
 - finish the Spektrum RX backend and validate live RC mode switching
 - add yaw coordination or rudder mixing for cleaner turns
-- seperate imu_yaw and gps_heading
+- validate and tune magnetometer calibration values per airframe
 - sd card
 
 
