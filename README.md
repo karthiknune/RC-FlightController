@@ -58,7 +58,8 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 | Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same mutex-protected sensor bus as the IMU |
 | GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
-| LoRa control | GPIO | `CS=26=A0`, `RST=4=A5`, `IRQ=39=A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
+| LoRa control | GPIO | `CS = 26 = A0`, `RST =4 = A5`, `IRQ = 39 = A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
+| SD Card | `CS = 25 = A1` |
 
 The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
 
@@ -156,6 +157,7 @@ Important calibration note:
 Current barometer driver:
 
 - Sensor family: BMP3XX
+- Sensor: BMP388
 - Bus: I2C
 - Output altitude from measured pressure using `SEALEVELPRESSURE_HPA`
 
@@ -168,6 +170,7 @@ Current GPS driver:
 - Interface: UART2
 - Baud: `115200`
 - Supported NMEA sentences: `GGA`, `RMC`
+- Senosor: HGLRC M100-5883
 
 What the firmware extracts:
 
@@ -178,6 +181,7 @@ What the firmware extracts:
 - local time with configurable UTC offset
 - ground speed
 - track heading
+- GPS Heading/Compass will only be available over I2C for HGLRC M100-5883
 
 The driver prints readable debug output when `GPS_DEBUG_OUTPUT_ENABLED` is set in `config.h`.
 
