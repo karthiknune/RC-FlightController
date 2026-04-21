@@ -147,6 +147,10 @@ Magnetometer calibration parameters now live in `include/config.h`:
 - `IMU_MAG_SCALE_X`, `IMU_MAG_SCALE_Y`, `IMU_MAG_SCALE_Z`
 - `IMU_RUN_MAG_CALIBRATION` startup flag
 
+Important calibration note:
+
+- `IMU_RUN_MAG_CALIBRATION` should not be `true` at the same time as `IMU_RUN_STARTUP_GYRO_CALIBRATION` or `IMU_RUN_STARTUP_LEVEL_CALIBRATION` at startup.
+
 ### Barometer
 
 Current barometer driver:
