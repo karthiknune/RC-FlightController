@@ -43,16 +43,19 @@ void RunStartupIMUCalibrationIfEnabled() {
         float pitch_offset_deg = 0.0f;
         (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
     }
+
+    if (IMU_RUN_MAG_CALIBRATION) {
+        float offset_x = 0.0f, offset_y = 0.0f, offset_z = 0.0f;
+        float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
+        (void)IMU_Run_Mag_Calibration(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z);
+    }
 }
 
 void UpdateFilteredIMUData() {
     if (currentIMU.healthy) {
         imu_data.roll = currentIMU.roll;
         imu_data.pitch = currentIMU.pitch;
-    }
-
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    // GPS still provides the best heading until tilt-compensated mag fusion is added
-        imu_data.yaw = gps_data.heading;
+        imu_data.yaw = currentIMU.yaw;
     }
 }
 
@@ -310,9 +313,6 @@ void setup() {
     else {
         Serial.println("LoRa Logging Disabled by config.");
     }
-    else {
-        Serial.println("LoRa init succeeded.");
-    }
 
     if (SD_LOGGING_ENABLED) {
         if (SD_Logger_Init()) {
@@ -397,7 +397,7 @@ void loop() {
 
     if (IMU_DEBUG_OUTPUT_ENABLED) {
         if (currentIMU.healthy) {
-            Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+            Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
         }
     }
 

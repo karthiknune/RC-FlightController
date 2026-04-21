@@ -66,27 +66,31 @@ constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
-//IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+// IMU-------------
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
 constexpr int IMU_TASK_CORE = 1;
-constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;      // Matches Mukund's ICM-20948 mounting
+constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X = 0.0f;
-constexpr float IMU_MAG_OFFSET_Y = 0.0f;
-constexpr float IMU_MAG_OFFSET_Z = 0.0f;
+constexpr float IMU_MAG_OFFSET_X = -41.17f; //  ken will have to calibrate these for his own board using the IMU_Run_Mag_Calibration function and update these values accordingly
+constexpr float IMU_MAG_OFFSET_Y = -45.83f;
+constexpr float IMU_MAG_OFFSET_Z = -86.10f;
+constexpr float IMU_MAG_SCALE_X =  1.073f;
+constexpr float IMU_MAG_SCALE_Y =  0.976f;
+constexpr float IMU_MAG_SCALE_Z =  0.959f;
 constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
 constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
+constexpr bool IMU_RUN_MAG_CALIBRATION = false;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
-//IMU-------------
+// IMU-------------
 
 //Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;

@@ -6,6 +6,7 @@ struct IMUData_raw {
     float mag_x, mag_y, mag_z;
     float roll;
     float pitch;
+    float yaw;
     bool healthy; // True if sensor is connected and reading
 };
 
