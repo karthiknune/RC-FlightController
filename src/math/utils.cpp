@@ -1,7 +1,6 @@
 #include "math/utils.h"
  
-namespace math
-{
+namespace math {
     float clamp_value(float value, float minimum, float maximum) {
     if (value < minimum) {
         return minimum;
@@ -12,7 +11,7 @@ namespace math
     }
  
     return value;
-}
+    }
  
     float wrap_heading_error(float heading_error_degrees) {
     while (heading_error_degrees > 180.0f) {
@@ -24,5 +23,5 @@ namespace math
     }
  
     return heading_error_degrees;
-}
+    }
 } // namespace math
