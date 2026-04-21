@@ -59,7 +59,7 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 | GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
 | LoRa control | GPIO | `CS = 26 = A0`, `RST =4 = A5`, `IRQ = 39 = A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
-| SD Card | `CS = 25 = A1` |
+| SD Card | GPIO | `CS = 25 = A1` | SPI wiring same as LoRa |
 
 The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
 
