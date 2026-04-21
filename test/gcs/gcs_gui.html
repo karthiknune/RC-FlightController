@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LoRa GCS Command Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-a: #f6efe5;
+      --bg-b: #e7f3ef;
+      --panel: #fffdf8;
+      --ink: #12303a;
+      --muted: #4c6770;
+      --teal: #0f766e;
+      --teal-soft: #d7f3ed;
+      --amber: #b45309;
+      --amber-soft: #fce7c3;
+      --ok: #166534;
+      --bad: #b42318;
+      --line: #dde7e5;
+      --shadow: 0 18px 42px rgba(18, 48, 58, 0.12);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Sora', 'Segoe UI', Tahoma, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 12%, rgba(15, 118, 110, 0.16), transparent 35%),
+        radial-gradient(circle at 88% 10%, rgba(180, 83, 9, 0.15), transparent 30%),
+        linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      min-height: 100vh;
+      padding: 28px 18px 42px;
+    }
+
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(221, 231, 229, 0.9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .top {
+      display: grid;
+      gap: 12px;
+      background: linear-gradient(120deg, rgba(255, 253, 248, 0.95), rgba(233, 246, 242, 0.95));
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.45rem, 1rem + 1.2vw, 2rem);
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.08rem;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .connection {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr auto auto;
+      align-items: end;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 122px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: #ffffff;
+      background: #6b7280;
+    }
+
+    .status-pill.connected {
+      background: var(--ok);
+    }
+
+    .status-pill.disconnected {
+      background: #4b5563;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .span-7 {
+      grid-column: span 7;
+    }
+
+    .span-5 {
+      grid-column: span 5;
+    }
+
+    .span-12 {
+      grid-column: span 12;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .label-block {
+      display: grid;
+      gap: 6px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid #cbd7d4;
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--ink);
+      background: #ffffff;
+    }
+
+    textarea,
+    code,
+    pre {
+      font-family: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 110px;
+      line-height: 1.35;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, opacity 160ms ease;
+      color: #ffffff;
+      background: var(--teal);
+    }
+
+    button.alt {
+      background: var(--amber);
+    }
+
+    button.ghost {
+      color: var(--ink);
+      background: #e7f3ef;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .preview {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px dashed #c9d9d5;
+      background: #f8fcfb;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .example-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .example-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: linear-gradient(110deg, #fffdf7, #f7faf9);
+      animation: rise 420ms ease both;
+    }
+
+    .example-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 8px;
+      font-weight: 700;
+      color: #11313a;
+    }
+
+    .example-json {
+      display: block;
+      padding: 10px;
+      border-radius: 10px;
+      background: #121f24;
+      color: #f1f5f8;
+      overflow-x: auto;
+      margin: 0;
+    }
+
+    .example-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 9px;
+    }
+
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .metric {
+      border-radius: 10px;
+      padding: 10px;
+      background: linear-gradient(120deg, var(--teal-soft), #eef8f6);
+      border: 1px solid #c8e6df;
+    }
+
+    .metric .k {
+      display: block;
+      font-size: 0.78rem;
+      color: #265965;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .metric .v {
+      font-family: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .json-view {
+      margin: 0;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #d8e5e2;
+      background: #f9fdfc;
+      min-height: 180px;
+      max-height: 320px;
+      overflow: auto;
+      white-space: pre;
+    }
+
+    .status-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 260px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+    }
+
+    .status-item {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      background: #f9fcfb;
+      font-family: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+      font-size: 0.86rem;
+      line-height: 1.3;
+    }
+
+    .status-item.ok {
+      border-color: #b7dfc7;
+      background: #ebf8ef;
+      color: #0f5132;
+    }
+
+    .status-item.error {
+      border-color: #f0c6c3;
+      background: #fff2f2;
+      color: #8f1d1d;
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 0.86rem;
+      color: #47626a;
+      background: var(--amber-soft);
+      border: 1px solid #f0d9b3;
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+
+    @keyframes rise {
+      from {
+        transform: translateY(5px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 1020px) {
+      .span-7,
+      .span-5,
+      .span-12 {
+        grid-column: span 12;
+      }
+
+      .connection {
+        grid-template-columns: 1fr;
+      }
+
+      .telemetry-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .field-grid,
+      .telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel top">
+      <h1>LoRa GCS Command Console</h1>
+      <p>
+        Send JSON commands to the receiver with guided inputs or raw mode.
+        Command examples below match your current receiver firmware.
+      </p>
+      <div class="connection">
+        <label class="label-block">
+          WebSocket URL
+          <input id="wsUrl" value="ws://localhost:8765" />
+        </label>
+        <button id="connectBtn" class="alt" type="button">Connect</button>
+        <span id="connectionState" class="status-pill disconnected">Disconnected</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-7">
+        <h2>Quick Command Builder</h2>
+        <div class="field-grid">
+          <label class="label-block">
+            Axis
+            <select id="axis">
+              <option value="roll">roll</option>
+              <option value="pitch">pitch</option>
+              <option value="yaw">yaw</option>
+              <option value="headingerror">headingerror</option>
+            </select>
+          </label>
+          <label class="label-block">
+            kp
+            <input id="kp" placeholder="18.5" />
+          </label>
+          <label class="label-block">
+            ki
+            <input id="ki" placeholder="0.02" />
+          </label>
+          <label class="label-block">
+            kd
+            <input id="kd" placeholder="0.12" />
+          </label>
+          <label class="label-block">
+            max_output (optional)
+            <input id="max_output" placeholder="420" />
+          </label>
+          <label class="label-block">
+            max_integral (optional)
+            <input id="max_integral" placeholder="120" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="buildBtn" type="button">Build JSON</button>
+          <button id="sendBuiltBtn" class="alt" type="button">Send Built Command</button>
+        </div>
+
+        <pre id="builtPreview" class="preview">{"axis":"roll","kp":18.5}</pre>
+      </article>
+
+      <article class="panel span-5">
+        <h2>Raw JSON Command</h2>
+        <label class="label-block">
+          Edit or paste a full command object
+          <textarea id="rawCommand" spellcheck="false">{"axis":"roll","kp":18.5}</textarea>
+        </label>
+
+        <div class="actions">
+          <button id="formatBtn" class="ghost" type="button">Format JSON</button>
+          <button id="sendRawBtn" class="alt" type="button">Send Raw Command</button>
+        </div>
+
+        <p class="hint">
+          Receiver expects one JSON object per line.
+          This dashboard sends exactly one line each time you click send.
+        </p>
+      </article>
+
+      <article class="panel span-7">
+        <h2>One-Click Examples</h2>
+        <div id="exampleList" class="example-list"></div>
+      </article>
+
+      <article class="panel span-5">
+        <h2>Send Status</h2>
+        <ul id="statusList" class="status-list"></ul>
+      </article>
+
+      <article class="panel span-12">
+        <h2>Live Telemetry Snapshot</h2>
+        <div class="telemetry-grid">
+          <div class="metric"><span class="k">Packet</span><span id="m_packet_id" class="v">-</span></div>
+          <div class="metric"><span class="k">RSSI</span><span id="m_rssi" class="v">-</span></div>
+          <div class="metric"><span class="k">SNR</span><span id="m_snr" class="v">-</span></div>
+          <div class="metric"><span class="k">Mode</span><span id="m_flightmode" class="v">-</span></div>
+          <div class="metric"><span class="k">GPS Sats</span><span id="m_gps_sats" class="v">-</span></div>
+          <div class="metric"><span class="k">GPS Lock</span><span id="m_gps_lock_acquired" class="v">-</span></div>
+        </div>
+        <pre id="telemetryJson" class="json-view">{}</pre>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const EXAMPLES = [
+      { label: 'Roll kp only', payload: { axis: 'roll', kp: 18.5 } },
+      { label: 'Roll kp/ki/kd', payload: { axis: 'roll', kp: 18.5, ki: 0.02, kd: 0.12 } },
+      { label: 'Pitch output limits', payload: { axis: 'pitch', max_output: 420, max_integral: 120 } },
+      { label: 'Nested pid object', payload: { pid: { roll: { kp: 19.0, ki: 0.01, kd: 0.10 }, pitch: { kp: 17.0, ki: 0.0, kd: 0.08 } } } },
+      { label: 'Headingerror tuning', payload: { axis: 'headingerror', kp: 0.8, ki: 0.0, kd: 0.04 } }
+    ];
+
+    let socket = null;
+
+    const ui = {
+      wsUrl: document.getElementById('wsUrl'),
+      connectBtn: document.getElementById('connectBtn'),
+      connectionState: document.getElementById('connectionState'),
+      axis: document.getElementById('axis'),
+      kp: document.getElementById('kp'),
+      ki: document.getElementById('ki'),
+      kd: document.getElementById('kd'),
+      maxOutput: document.getElementById('max_output'),
+      maxIntegral: document.getElementById('max_integral'),
+      buildBtn: document.getElementById('buildBtn'),
+      sendBuiltBtn: document.getElementById('sendBuiltBtn'),
+      builtPreview: document.getElementById('builtPreview'),
+      rawCommand: document.getElementById('rawCommand'),
+      formatBtn: document.getElementById('formatBtn'),
+      sendRawBtn: document.getElementById('sendRawBtn'),
+      exampleList: document.getElementById('exampleList'),
+      statusList: document.getElementById('statusList'),
+      telemetryJson: document.getElementById('telemetryJson')
+    };
+
+    function nowStamp() {
+      return new Date().toLocaleTimeString();
+    }
+
+    function addStatus(text, kind) {
+      const item = document.createElement('li');
+      item.className = 'status-item' + (kind ? ' ' + kind : '');
+      item.textContent = '[' + nowStamp() + '] ' + text;
+      ui.statusList.prepend(item);
+
+      const maxRows = 40;
+      while (ui.statusList.children.length > maxRows) {
+        ui.statusList.removeChild(ui.statusList.lastChild);
+      }
+    }
+
+    function setConnectedState(connected, label) {
+      ui.connectionState.textContent = label;
+      ui.connectionState.classList.remove('connected', 'disconnected');
+      ui.connectionState.classList.add(connected ? 'connected' : 'disconnected');
+      ui.connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+    }
+
+    function readNumber(el) {
+      const value = el.value.trim();
+      if (!value) {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function buildPayload() {
+      const payload = {
+        axis: ui.axis.value
+      };
+
+      const kp = readNumber(ui.kp);
+      const ki = readNumber(ui.ki);
+      const kd = readNumber(ui.kd);
+      const maxOutput = readNumber(ui.maxOutput);
+      const maxIntegral = readNumber(ui.maxIntegral);
+
+      if (kp !== null) {
+        payload.kp = kp;
+      }
+      if (ki !== null) {
+        payload.ki = ki;
+      }
+      if (kd !== null) {
+        payload.kd = kd;
+      }
+      if (maxOutput !== null) {
+        payload.max_output = maxOutput;
+      }
+      if (maxIntegral !== null) {
+        payload.max_integral = maxIntegral;
+      }
+
+      return payload;
+    }
+
+    function pretty(obj) {
+      return JSON.stringify(obj, null, 2);
+    }
+
+    function compact(obj) {
+      return JSON.stringify(obj);
+    }
+
+    function setRawFromPayload(payload) {
+      ui.rawCommand.value = pretty(payload);
+      ui.builtPreview.textContent = compact(payload);
+    }
+
+    function parseRawCommand() {
+      let parsed;
+      try {
+        parsed = JSON.parse(ui.rawCommand.value);
+      } catch (err) {
+        throw new Error('Raw JSON parse error: ' + err.message);
+      }
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Command must be a JSON object.');
+      }
+
+      return parsed;
+    }
+
+    function sendPayload(payload) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        addStatus('Not connected. Click Connect before sending.', 'error');
+        return;
+      }
+
+      const envelope = {
+        type: 'command',
+        payload: payload
+      };
+
+      socket.send(JSON.stringify(envelope));
+      addStatus('Queued command: ' + compact(payload), 'ok');
+    }
+
+    function connectSocket() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.close();
+        return;
+      }
+
+      const url = ui.wsUrl.value.trim();
+      if (!url) {
+        addStatus('WebSocket URL is required.', 'error');
+        return;
+      }
+
+      setConnectedState(false, 'Connecting');
+
+      try {
+        socket = new WebSocket(url);
+      } catch (err) {
+        setConnectedState(false, 'Disconnected');
+        addStatus('WebSocket setup failed: ' + err.message, 'error');
+        return;
+      }
+
+      socket.onopen = function () {
+        setConnectedState(true, 'Connected');
+        addStatus('Connected to ' + url, 'ok');
+      };
+
+      socket.onclose = function () {
+        setConnectedState(false, 'Disconnected');
+        addStatus('Connection closed.', '');
+      };
+
+      socket.onerror = function () {
+        addStatus('WebSocket error. Check bridge and URL.', 'error');
+      };
+
+      socket.onmessage = function (event) {
+        handleMessage(event.data);
+      };
+    }
+
+    function updateMetric(key, value) {
+      const target = document.getElementById('m_' + key);
+      if (!target || value === undefined || value === null) {
+        return;
+      }
+      target.textContent = String(value);
+    }
+
+    function renderTelemetry(packet) {
+      updateMetric('packet_id', packet.packet_id);
+      updateMetric('rssi', packet.rssi);
+      updateMetric('snr', packet.snr);
+      updateMetric('flightmode', packet.flightmode);
+      updateMetric('gps_sats', packet.gps_sats);
+      updateMetric('gps_lock_acquired', packet.gps_lock_acquired);
+      ui.telemetryJson.textContent = pretty(packet);
+    }
+
+    function handleMessage(raw) {
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (_err) {
+        addStatus('Received non-JSON message: ' + raw, '');
+        return;
+      }
+
+      if (data && data.type === 'command_status') {
+        if (data.ok) {
+          addStatus('Bridge sent: ' + (data.sent || '(no payload)'), 'ok');
+        } else {
+          addStatus('Bridge rejected command: ' + (data.error || 'Unknown error'), 'error');
+        }
+        return;
+      }
+
+      if (data && typeof data === 'object') {
+        renderTelemetry(data);
+      }
+    }
+
+    function buildExampleCards() {
+      ui.exampleList.innerHTML = '';
+
+      EXAMPLES.forEach(function (entry) {
+        const wrapper = document.createElement('article');
+        wrapper.className = 'example-item';
+
+        const title = document.createElement('div');
+        title.className = 'example-title';
+        title.textContent = entry.label;
+
+        const code = document.createElement('pre');
+        code.className = 'example-json';
+        code.textContent = compact(entry.payload);
+
+        const actionWrap = document.createElement('div');
+        actionWrap.className = 'example-actions';
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'ghost';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', function () {
+          setRawFromPayload(entry.payload);
+          addStatus('Loaded example: ' + entry.label, '');
+        });
+
+        const sendBtn = document.createElement('button');
+        sendBtn.type = 'button';
+        sendBtn.className = 'alt';
+        sendBtn.textContent = 'Send';
+        sendBtn.addEventListener('click', function () {
+          sendPayload(entry.payload);
+        });
+
+        actionWrap.appendChild(loadBtn);
+        actionWrap.appendChild(sendBtn);
+
+        wrapper.appendChild(title);
+        wrapper.appendChild(code);
+        wrapper.appendChild(actionWrap);
+
+        ui.exampleList.appendChild(wrapper);
+      });
+    }
+
+    ui.connectBtn.addEventListener('click', connectSocket);
+
+    ui.buildBtn.addEventListener('click', function () {
+      const payload = buildPayload();
+      setRawFromPayload(payload);
+      addStatus('Built command from form.', '');
+    });
+
+    ui.sendBuiltBtn.addEventListener('click', function () {
+      const payload = buildPayload();
+      setRawFromPayload(payload);
+      sendPayload(payload);
+    });
+
+    ui.formatBtn.addEventListener('click', function () {
+      try {
+        const payload = parseRawCommand();
+        ui.rawCommand.value = pretty(payload);
+        ui.builtPreview.textContent = compact(payload);
+        addStatus('Raw JSON formatted.', '');
+      } catch (err) {
+        addStatus(err.message, 'error');
+      }
+    });
+
+    ui.sendRawBtn.addEventListener('click', function () {
+      try {
+        const payload = parseRawCommand();
+        sendPayload(payload);
+      } catch (err) {
+        addStatus(err.message, 'error');
+      }
+    });
+
+    setConnectedState(false, 'Disconnected');
+    buildExampleCards();
+    setRawFromPayload(EXAMPLES[0].payload);
+  </script>
+</body>
+</html>
