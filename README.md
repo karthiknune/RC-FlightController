@@ -170,7 +170,7 @@ Current GPS driver:
 - Interface: UART2
 - Baud: `115200`
 - Supported NMEA sentences: `GGA`, `RMC`
-- Senosor: HGLRC M100-5883
+- Sensor: HGLRC M100-5883
 
 What the firmware extracts:
 
