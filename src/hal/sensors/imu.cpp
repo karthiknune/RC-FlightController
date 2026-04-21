@@ -37,14 +37,12 @@ namespace
     float g_gyro_bias_y_dps = 0.0f;
     float g_gyro_bias_z_dps = 0.0f;
 
-    bool ProbeIMULocked()
-    {
+    bool ProbeIMULocked() {
         Wire.beginTransmission(kIMUAddress);
         return Wire.endTransmission(true) == 0;
     }
 
-    void ResetOrientationState()
-    {
+    void ResetOrientationState() {
         g_last_time_us = 0;
         g_last_mag_time_us = 0;
         g_last_mag_x = 0.0f;
@@ -56,8 +54,7 @@ namespace
         g_yaw_deg = 0.0f;
     }
 
-    float ApplyBodyFrameAxis(float value, float axis_sign)
-    {
+    float ApplyBodyFrameAxis(float value, float axis_sign) {
         return value * axis_sign;
     }
 
@@ -90,8 +87,7 @@ namespace
         data.mag_z = ApplyBodyFrameAxis((raw_mag_z - IMU_MAG_OFFSET_Z) * IMU_MAG_SCALE_Z, IMU_BODY_FRAME_Z_SIGN);
     }
 
-    void UpdateOrientation(IMUData_raw &data)
-    {
+    void UpdateOrientation(IMUData_raw &data) {
         const uint32_t now_us = micros();
         float dt = 0.0f;
         if (g_last_time_us != 0)
@@ -130,8 +126,7 @@ namespace
                                    std::abs(data.mag_y - g_last_mag_y) > epsilon || 
                                    std::abs(data.mag_z - g_last_mag_z) > epsilon);
 
-        if (!g_orientation_seeded || dt <= 0.0f || dt > 0.5f)
-        {
+        if (!g_orientation_seeded || dt <= 0.0f || dt > 0.5f) {
             g_roll_deg = accel_roll;
             g_pitch_deg = accel_pitch;
             g_yaw_deg = mag_heading;
@@ -142,8 +137,7 @@ namespace
             g_last_mag_y = data.mag_y;
             g_last_mag_z = data.mag_z;
         }
-        else
-        {
+        else {
             // Dynamic filter weights based on actual loop time
             const float alpha_xy = kFilterTimeConstantXY / (kFilterTimeConstantXY + dt);
 
@@ -165,16 +159,14 @@ namespace
             g_yaw_deg = math::wrap_heading_error(g_yaw_deg);
 
             // Only pull towards compass when fresh data arrives
-            if (mag_is_fresh)
-            {
+            if (mag_is_fresh) {
                 const float mag_dt = (g_last_mag_time_us != 0) ? (static_cast<float>(now_us - g_last_mag_time_us) / 1000000.0f) : 0.0f;
                 g_last_mag_time_us = now_us;
                 g_last_mag_x = data.mag_x;
                 g_last_mag_y = data.mag_y;
                 g_last_mag_z = data.mag_z;
 
-                if (mag_dt > 0.0f)
-                {
+                if (mag_dt > 0.0f) {
                     const float alpha_z = kFilterTimeConstantZ / (kFilterTimeConstantZ + mag_dt);
                     const float yaw_error = math::wrap_heading_error(mag_heading - g_yaw_deg);
                     g_yaw_deg = math::wrap_heading_error(g_yaw_deg + ((1.0f - alpha_z) * yaw_error));
@@ -187,12 +179,9 @@ namespace
         data.yaw = g_yaw_deg;
     }
 
-    void UpdateIMUAvailability(bool available)
-    {
-        if (available)
-        {
-            if (!g_imu_ready && SENSOR_STATUS_LOGGING_ENABLED)
-            {
+    void UpdateIMUAvailability(bool available) {
+        if (available) {
+            if (!g_imu_ready && SENSOR_STATUS_LOGGING_ENABLED) {
                 Serial.println("ICM-20948 available.");
             }
 
@@ -201,8 +190,7 @@ namespace
             return;
         }
 
-        if ((g_imu_ready || !g_imu_missing_logged) && SENSOR_STATUS_LOGGING_ENABLED)
-        {
+        if ((g_imu_ready || !g_imu_missing_logged) && SENSOR_STATUS_LOGGING_ENABLED) {
             Serial.println("ICM-20948 unavailable. Continuing without IMU data.");
         }
 
@@ -216,13 +204,11 @@ namespace
                        sensors_event_t &temp,
                        sensors_event_t &m)
     {
-        if (!SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS)))
-        {
+        if (!SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS))) {
             return false;
         }
 
-        if (!ProbeIMULocked())
-        {
+        if (!ProbeIMULocked()) {
             SensorBus_Unlock();
             UpdateIMUAvailability(false);
             return false;
@@ -233,29 +219,24 @@ namespace
         return true;
     }
 
-    bool TryInitializeIMU()
-    {
+    bool TryInitializeIMU() {
         const uint32_t now_ms = millis();
         if (g_last_init_attempt_ms != 0 &&
-            (now_ms - g_last_init_attempt_ms) < SENSOR_RECONNECT_INTERVAL_MS)
-        {
+            (now_ms - g_last_init_attempt_ms) < SENSOR_RECONNECT_INTERVAL_MS) {
             return g_imu_ready;
         }
 
         g_last_init_attempt_ms = now_ms;
 
-        if (!SensorBus_Init())
-        {
+        if (!SensorBus_Init()) {
             UpdateIMUAvailability(false);
             return false;
         }
 
         bool begin_ok = false;
-        if (SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS)))
-        {
+        if (SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS))) {
             begin_ok = icm.begin_I2C(kIMUAddress, &Wire);
-            if (begin_ok)
-            {
+            if (begin_ok) {
                 icm.setAccelRange(ICM20948_ACCEL_RANGE_8_G);    
                 icm.setGyroRange(ICM20948_GYRO_RANGE_500_DPS);  
                 icm.setMagDataRate(AK09916_MAG_DATARATE_50_HZ); 
@@ -263,8 +244,7 @@ namespace
             SensorBus_Unlock();
         }
 
-        if (!begin_ok)
-        {
+        if (!begin_ok) {
             UpdateIMUAvailability(false);
             return false;
         }
@@ -276,15 +256,12 @@ namespace
 
 } // namespace
 
-void IMU_Init()
-{
+void IMU_Init() {
     (void)TryInitializeIMU();
 }
 
-bool IMU_Calibrate_Gyro()
-{
-    if (!g_imu_ready && !TryInitializeIMU())
-    {
+bool IMU_Calibrate_Gyro() {
+    if (!g_imu_ready && !TryInitializeIMU()) {
         return false;
     }
 
@@ -295,15 +272,13 @@ bool IMU_Calibrate_Gyro()
     double sum_gz = 0.0;
     int captured_samples = 0;
 
-    for (int sample_index = 0; sample_index < IMU_GYRO_CALIBRATION_SAMPLES; ++sample_index)
-    {
+    for (int sample_index = 0; sample_index < IMU_GYRO_CALIBRATION_SAMPLES; ++sample_index) {
         sensors_event_t a = {};
         sensors_event_t g = {};
         sensors_event_t temp = {};
         sensors_event_t m = {};
 
-        if (!ReadIMUEvents(a, g, temp, m))
-        {
+        if (!ReadIMUEvents(a, g, temp, m)) {
             delay(IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS);
             continue;
         }
@@ -316,8 +291,7 @@ bool IMU_Calibrate_Gyro()
         delay(IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS);
     }
 
-    if (captured_samples == 0)
-    {
+    if (captured_samples == 0) {
         Serial.println("Gyro calibration failed: no valid samples captured.");
         return false;
     }
@@ -336,13 +310,11 @@ bool IMU_Calibrate_Gyro()
     return true;
 }
 
-bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
-{
+bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg) {
     roll_offset_deg = 0.0f;
     pitch_offset_deg = 0.0f;
 
-    if (!g_imu_ready && !TryInitializeIMU())
-    {
+    if (!g_imu_ready && !TryInitializeIMU()) {
         return false;
     }
 
@@ -352,8 +324,7 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
     Serial.println("========================================");
     Serial.println("Hold the aircraft steady in level flight attitude.");
 
-    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining)
-    {
+    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining)  {
         Serial.printf("Starting in %d...\n", seconds_remaining);
         delay(1000);
     }
@@ -363,12 +334,10 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
     int captured_samples = 0;
 
     Serial.println("Recording samples...");
-    for (int sample_index = 0; sample_index < IMU_LEVEL_CALIBRATION_SAMPLES; ++sample_index)
-    {
+    for (int sample_index = 0; sample_index < IMU_LEVEL_CALIBRATION_SAMPLES; ++sample_index) {
         IMUData_raw sample = {};
         IMU_Read(sample);
-        if (!sample.healthy)
-        {
+        if (!sample.healthy) {
             delay(IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS);
             continue;
         }
@@ -377,16 +346,14 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg)
         sum_pitch += static_cast<double>(g_pitch_deg);
         ++captured_samples;
 
-        if ((sample_index + 1) % 50 == 0)
-        {
+        if ((sample_index + 1) % 50 == 0) {
             Serial.print("#");
         }
 
         delay(IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS);
     }
 
-    if (captured_samples == 0)
-    {
+    if (captured_samples == 0) {
         Serial.println();
         Serial.println("Level calibration failed: no valid IMU samples captured.");
         return false;
@@ -420,8 +387,7 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     scale_y = 1.0f;
     scale_z = 1.0f;
 
-    if (!g_imu_ready && !TryInitializeIMU())
-    {
+    if (!g_imu_ready && !TryInitializeIMU()) {
         return false;
     }
 
@@ -431,8 +397,7 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     Serial.println("========================================");
     Serial.println("Rotate and tumble the aircraft in ALL directions (figure 8).");
 
-    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining)
-    {
+    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining) {
         Serial.printf("Starting in %d...\n", seconds_remaining);
         delay(1000);
     }
@@ -446,21 +411,18 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     constexpr int kMagSampleDelayMs = 20; 
 
     Serial.println("Recording samples... Keep tumbling!");
-    for (int sample_index = 0; sample_index < kMagCalibrationSamples; ++sample_index)
-    {
+    for (int sample_index = 0; sample_index < kMagCalibrationSamples; ++sample_index) {
         sensors_event_t a = {};
         sensors_event_t g = {};
         sensors_event_t temp = {};
         sensors_event_t m = {};
 
-        if (!ReadIMUEvents(a, g, temp, m))
-        {
+        if (!ReadIMUEvents(a, g, temp, m)) {
             delay(kMagSampleDelayMs);
             continue;
         }
 
-        if (m.magnetic.x != 0.0f || m.magnetic.y != 0.0f || m.magnetic.z != 0.0f)
-        {
+        if (m.magnetic.x != 0.0f || m.magnetic.y != 0.0f || m.magnetic.z != 0.0f) {
             if (m.magnetic.x < min_x)
                 min_x = m.magnetic.x;
             if (m.magnetic.x > max_x)
@@ -476,16 +438,14 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
             ++captured_samples;
         }
 
-        if ((sample_index + 1) % 50 == 0)
-        {
+        if ((sample_index + 1) % 50 == 0) {
             Serial.print("#");
         }
 
         delay(kMagSampleDelayMs);
     }
 
-    if (captured_samples == 0)
-    {
+    if (captured_samples == 0) {
         Serial.println("\nMag calibration failed: no valid samples captured.");
         return false;
     }
@@ -522,10 +482,8 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     return true;
 }
 
-void IMU_Read(IMUData_raw &data)
-{
-    if (!g_imu_ready && !TryInitializeIMU())
-    {
+void IMU_Read(IMUData_raw &data) {
+    if (!g_imu_ready && !TryInitializeIMU()) {
         data.healthy = false;
         return;
     }
@@ -535,8 +493,7 @@ void IMU_Read(IMUData_raw &data)
     sensors_event_t temp = {};
     sensors_event_t m = {};
 
-    if (!ReadIMUEvents(a, g, temp, m))
-    {
+    if (!ReadIMUEvents(a, g, temp, m)) {
         data.healthy = false;
         return;
     }
