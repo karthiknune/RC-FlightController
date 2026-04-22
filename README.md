@@ -327,6 +327,97 @@ What it does:
 
 If your LoRa module is wired differently on the ESP32-WROOM DevKit, change the pin constants at the top of the sketch before flashing.
 
+## GCS Bridge and Dashboard
+
+The Ground Control Station tools live under [`test/gcs`](test/gcs):
+
+- [`test/gcs/gcs_bridge.py`](test/gcs/gcs_bridge.py): reads receiver serial telemetry and rebroadcasts packets as JSON over WebSocket
+- [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html): browser dashboard that displays telemetry and can send JSON commands
+
+### What the Bridge Does
+
+`gcs_bridge.py`:
+
+- reads the ESP32 LoRa receiver serial output line-by-line
+- groups telemetry fields into complete packet JSON objects
+- broadcasts each packet to connected WebSocket clients
+- forwards command JSON from WebSocket clients back to the receiver over serial
+
+### Install
+
+From the repo root:
+
+```powershell
+cd test/gcs
+python -m venv .venv
+```
+
+Activate the environment:
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```powershell
+pip install pyserial websockets
+```
+
+### Setup
+
+1. Connect the ESP32 receiver board to your computer over USB.
+2. Identify the serial port:
+
+```powershell
+python gcs_bridge.py --list-ports
+```
+
+3. Pick the correct port for your OS:
+
+- Windows example: `COM5`
+- Linux example: `/dev/ttyUSB0`
+- macOS example: `/dev/tty.usbserial-xxxx`
+
+### Usage
+
+Start the bridge from `test/gcs`:
+
+Linux example:
+
+```bash
+python gcs_bridge.py --port /dev/ttyUSB0
+```
+
+Windows example:
+
+```powershell
+python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+```
+
+With defaults, the WebSocket server listens on `ws://localhost:8765`.
+
+Open [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html) in a browser and connect it to:
+
+- `ws://localhost:8765` when the bridge runs locally
+- `ws://<bridge-host-ip>:8765` if the bridge is running on another machine
+
+### CLI Reference
+
+```text
+python gcs_bridge.py --port /dev/ttyUSB0
+python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+python gcs_bridge.py --list-ports
+```
+
 ## Receiver and RC Input
 
 This section is about flight-control RC input, not the LoRa telemetry receiver described above.
