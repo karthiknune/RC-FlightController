@@ -15,6 +15,7 @@
 #include "logging/sd_logger.h"
 #include "nav/waypoint.h"
 #include "flight/home.h"
+#include "status/status_led.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
 IMUData_filtered imu_data = {};
@@ -282,6 +283,17 @@ void TaskSDLog(void *pvParameters) {
     }
 }
 
+void TaskStatusLED(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(STATUS_LED_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        StatusLED_Update();
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
@@ -291,6 +303,8 @@ void setup() {
     digitalWrite(CS_PIN, HIGH);
     pinMode(SD_CS, OUTPUT);
     digitalWrite(SD_CS, HIGH);
+
+    StatusLED_Init();
     
     if (!SensorBus_Init()) {
         Serial.println("Sensor I2C bus init failed.");
@@ -393,6 +407,16 @@ void setup() {
             SD_LOG_TASK_CORE
         );
     }
+
+    xTaskCreatePinnedToCore(
+        TaskStatusLED,
+        "Status_LED_Task",
+        STATUS_LED_TASK_STACK_SIZE,
+        NULL,
+        STATUS_LED_TASK_PRIORITY,
+        NULL,
+        STATUS_LED_TASK_CORE
+    );
 }
 
 void loop() {

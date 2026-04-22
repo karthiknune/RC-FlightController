@@ -14,6 +14,8 @@ void DeselectLoRaOnSharedSPI() {
     digitalWrite(CS_PIN, HIGH);
 }
 
+bool g_sd_card_ready = false;
+
 } // namespace
 
 File logFile; // Global file object for the current log
@@ -23,11 +25,13 @@ bool SD_Logger_Init() {
 
     if (!SPIBus_Init()) {
         Serial.println("SPI bus mutex init failed.");
+        g_sd_card_ready = false;
         return false;
     }
 
     if (!SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
         Serial.println("Timed out waiting for SPI bus lock.");
+        g_sd_card_ready = false;
         return false;
     }
 
@@ -43,6 +47,7 @@ bool SD_Logger_Init() {
         SPIBus_Unlock();
         Serial.println("Card Mount Failed.");
         Serial.println("Troubleshooting: Check wiring, SD format (FAT32), or power supply.");
+        g_sd_card_ready = false;
         return false;
     }
     
@@ -50,6 +55,7 @@ bool SD_Logger_Init() {
     if (cardType == CARD_NONE) {
         SPIBus_Unlock();
         Serial.println("No SD card attached (Hardware detected, but no card found).");
+        g_sd_card_ready = false;
         return false;
     }
 
@@ -66,6 +72,7 @@ bool SD_Logger_Init() {
     Serial.printf("Shared SPI Frequency: %luHz\n", static_cast<unsigned long>(SPI_BUS_FREQUENCY_HZ));
 
     SPIBus_Unlock();
+    g_sd_card_ready = true;
 
     return true;
 }
@@ -164,4 +171,8 @@ void SD_Logger_CloseLog() {
         SPIBus_Unlock();
         Serial.println("Log file closed.");
     }
+}
+
+bool SD_Logger_IsReady() {
+    return g_sd_card_ready && static_cast<bool>(logFile);
 }

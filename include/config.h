@@ -50,6 +50,16 @@ constexpr uint8_t SD_MISO = 21;
 constexpr uint8_t SD_CS = 25;   // Connected to A1
 // SD Card Logger-------------
 
+// Status LED-------------
+constexpr int STATUS_LED_TASK_PERIOD_MS = 100;
+constexpr int STATUS_LED_TASK_STACK_SIZE = 4096;
+constexpr int STATUS_LED_TASK_PRIORITY = 1;
+constexpr int STATUS_LED_TASK_CORE = 1;
+constexpr uint32_t STATUS_LED_CYCLE_PERIOD_MS = 1200;
+constexpr uint32_t STATUS_LED_BLINK_PERIOD_MS = 500;
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 32;
+// Status LED-------------
+
 // GPS-------------
 constexpr int GPS_UART_NUM = 2;
 constexpr unsigned long GPS_BAUD_RATE = 115200UL;
@@ -62,7 +72,7 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = true;
 // GPS-------------
 
