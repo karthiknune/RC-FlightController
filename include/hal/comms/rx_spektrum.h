@@ -4,7 +4,6 @@
 extern RCData rc_data;
 
 void rx_init();
-void rx_read();  ///read rc channel raw pwms
 
 ///rc channel pwm to target roll pitch setpoints
 //all these return "DESIRED PLANE ANGLES" in degrees, throttle in 0-1000 range
@@ -15,4 +14,5 @@ float get_des_throttle();
 
 float get_flight_mode_pwm();
 
-
+#define SERVO_MIN 500
+#define SERVO_MAX 2500
