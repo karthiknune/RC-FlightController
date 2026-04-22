@@ -22,6 +22,7 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | GPS | Implemented | UART2 parser for GGA and RMC sentences |
 | Waypoint navigation | Implemented | Haversine distance, bearing, leg and mission progress |
 | Flight scheduler | Implemented | FreeRTOS tasks plus mode dispatcher |
+| NeoPixel status LED | Implemented | Built-in Feather NeoPixel cycles through active subsystem faults |
 | LoRa telemetry TX | Implemented | Raw binary telemetry packet sent periodically |
 | LoRa telemetry RX | Reference receiver sketch available | Arduino IDE receiver sketch provided for ESP32-WROOM DevKit under `test/arduino_lora_receiver` |
 | Manual / Stabilize / AltHold / Glide / Waypoint modes | Implemented | Runtime-selectable by RC mode PWM mapping |
@@ -59,7 +60,9 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 | GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
 | LoRa control | GPIO | `CS = 26 = A0`, `RST =4 = A5`, `IRQ = 39 = A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
-| SD Card | GPIO | `CS = 25 = A1` | SPI wiring same as LoRa |
+| SD Card | SPI | `CS = 25 = A1` | SPI wiring same as LoRa |
+| Built-in status LED | NeoPixel | `PIN_NEOPIXEL` | Used for subsystem health / fault indication |
+#######TODO: Airspeed sensor
 
 The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
 
@@ -67,6 +70,8 @@ The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/senso
 - sets the bus clock to `400000 Hz`
 - guards IMU and barometer access with a FreeRTOS mutex
 - lets both sensor drivers retry initialization if a device is temporarily missing
+
+############ TODO: Write the same for SPI
 
 ### PWM Output Pins
 
@@ -104,6 +109,8 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 | `TaskGPSRead` | `50 ms` | Parses incoming GPS NMEA stream and updates navigation |
 | `TaskFlightControl` | `100 ms` | Reads RC input, selects flight mode, runs active mode |
 | `TaskTelemetryTx` | `500 ms` | Sends telemetry snapshot over LoRa |
+| `TaskSDLog` | `50 ms` | Logs telemetry snapshots to the SD card when enabled |
+| `TaskStatusLED` | `100 ms` | Updates the built-in NeoPixel based on current subsystem health |
 
 ### Main Data Flow
 
@@ -113,6 +120,45 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 4. The active flight mode computes control outputs.
 5. The mixer converts those commands into PWM outputs.
 6. A telemetry task packages the current state and sends it over LoRa.
+7. A status LED task cycles through active subsystem faults on the built-in NeoPixel.
+
+## Status LED
+
+The Feather ESP32 V2 built-in NeoPixel is used as a quick health indicator for major subsystems. The implementation lives in [`src/status/status_led.cpp`](src/status/status_led.cpp) and is driven by `TaskStatusLED` from [`src/main.cpp`](src/main.cpp).
+
+The LED cycles through every currently active fault instead of showing only one. If no tracked faults are active, it shows solid green.
+
+### Fault Color Map
+
+| Condition | LED behavior |
+| --- | --- |
+| GPS not healthy or no lock acquired | Solid red |
+| SD card not ready or no log file open | Blinking red |
+| LoRa not initialized | Solid yellow |
+| IMU not healthy | Solid magenta |
+| Barometer not healthy | Solid blue |
+| No active faults | Solid green |
+
+### Status LED Timing
+
+The timing and brightness are configurable in [`include/config.h`](include/config.h):
+
+- `STATUS_LED_TASK_PERIOD_MS`
+- `STATUS_LED_CYCLE_PERIOD_MS`
+- `STATUS_LED_BLINK_PERIOD_MS`
+- `STATUS_LED_BRIGHTNESS`
+
+Current behavior:
+
+- the LED task updates every `100 ms`
+- each active fault is shown for `1200 ms` before rotating to the next one
+- blinking faults toggle at `500 ms`
+
+### Notes
+
+- GPS fault indication intentionally treats "connected but not locked yet" as a fault, so the LED stays red until a usable fix is available.
+- SD status currently means the card mounted successfully and a log file is open. It does not yet detect every possible runtime write failure after startup.
+- LoRa and SD are only considered faults when their corresponding `LORA_LOGGING_ENABLED` or `SD_LOGGING_ENABLED` config flags are enabled.
 
 ## Sensor Behavior
 
@@ -491,6 +537,7 @@ Key groups:
 - pin assignments
 - I2C bus pins and frequency
 - task periods and stack sizes
+- status LED timing and brightness
 - PID gains and limits
 - default flight mode
 - RC PWM thresholds for flight-mode switching
