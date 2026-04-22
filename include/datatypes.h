@@ -49,6 +49,12 @@ struct BarometerData {
     bool healthy; 
 };
 
+struct AirspeedData {
+    double pressure_pa;
+    float airspeed_mps;
+    bool healthy;
+};
+
 
 struct RCData {
     float aileron_pwm;
