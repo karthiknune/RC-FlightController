@@ -20,3 +20,6 @@ void SD_Logger_Flush();
 
 // Closes the currently open log file.
 void SD_Logger_CloseLog();
+
+// Returns true when the SD card is mounted and a log file is open.
+bool SD_Logger_IsReady();

@@ -144,3 +144,7 @@ size_t lora_receive(uint8_t *buffer, size_t max_length) {
   give_lora_lock();
   return bytes_read;
 }
+
+bool lora_is_ready() {
+  return g_lora_ready;
+}
