@@ -6,7 +6,7 @@ extern RCData rc_data;
 void rx_init();
 
 ///rc channel pwm to target roll pitch setpoints
-//all these return "DESIRED PLANE ANGLES" in degrees, throttle in 0-1000 range
+//all these return "DESIRED PLANE ANGLES" in degrees, throttle in 0-100 percent
 float get_des_roll();
 float get_des_pitch();
 float get_des_yaw();

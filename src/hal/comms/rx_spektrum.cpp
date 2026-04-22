@@ -126,15 +126,12 @@ float rx_to_angle(float raw_pwm, float max_angle){
 }
 
 float rx_to_throttle(float raw_pwm){
-    if (raw_pwm<1050)
-    {
+    if (raw_pwm < 1050) {
         raw_pwm = 1000;
-    }
-    else if (raw_pwm > 2000)
-    {
+    } else if (raw_pwm > 2000) {
         raw_pwm = 2000;
     }
-    return raw_pwm -1000.0f ;
+    return (raw_pwm - 1000.0f) / 10.0f;   // 0-100 percent of stick
 }
 
 float get_des_roll() {
