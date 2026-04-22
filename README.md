@@ -479,10 +479,6 @@ The firmware already has the following logic:
 
 However, the actual receiver backend is still placeholder code in [`src/hal/comms/rx_spektrum.cpp`](src/hal/comms/rx_spektrum.cpp):
 
-- `rx_init()` is not implemented
-- `rx_read()` is not implemented
-- raw PWM values are currently hard-coded test values
-
 So the control architecture is wired, but real RC input depends on finishing the Spektrum interface.
 
 ## Project Layout

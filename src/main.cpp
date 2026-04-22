@@ -227,8 +227,6 @@ void TaskFlightControl(void *pvParameters) {
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        rx_read();
-
         const FlightMode desired_mode = DetermineFlightMode();
         const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
         if (!g_flight_mode_initialized || effective_mode != active_flight_mode) {
@@ -440,6 +438,11 @@ void loop() {
         } else {
             Serial.println("GPS reading unhealthy");
         }
+    }
+
+    if(RX_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("RC Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u | FlightMode PWM: %u\n",
+                      rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm);
     }
 
     delay(50); 

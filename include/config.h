@@ -1,12 +1,4 @@
 //////// config file for all pin assignments, tuning parameters and other constants
-
-
-// RX_Throttle INPUT_PIN 37    // D37
-// RX_Rudder INPUT_PIN 33     // D33  
-// RX Elevator INPUT_PIN 32    // D32
-// RX_Mode INPUT_PIN 15       // D15
-
-
 #pragma once
 #include <cstdint>
 
@@ -123,10 +115,10 @@ constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr float FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0f;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
-constexpr float FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0f;
-constexpr float FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0f;
-constexpr float FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0f;
+constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
+constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0;
+constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0;
+constexpr unsigned int FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0;
 constexpr int BARO_TASK_PERIOD_MS = 50;
 constexpr int BARO_TASK_STACK_SIZE = 4096;
 constexpr int BARO_TASK_PRIORITY = 1;
@@ -139,11 +131,23 @@ constexpr int FLIGHT_CONTROL_TASK_CORE = 1;
 
 
 ///Motor and servo pins
-
+constexpr bool PWM_DEBUG_OUTPUT_ENABLED = false;
 #define esc_pin 13
 #define aileron_pin 12
 #define elevator_pin 27
 #define rudder_pin 14
+
+///rx pins
+constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
+#define USE_ESC
+#define USE_ELEVATOR
+#define USE_RUDDER
+//#define USE_AILERON
+#define rx_esc_pin 21
+#define rx_elevator_pin 32
+#define rx_rudder_pin 33
+#define rx_mode_pin 15
+#define rx_aileron_pin 33
 
 //channels
 
@@ -160,8 +164,8 @@ const int pwm_resolution = 16; // 16-bit resolution for finer control
 //PWM limits needed for hardware interfacing and safety
 
 //esc/throttle
-constexpr float throttle_slope = 10.0f;   // 10 us per percent throttle
-constexpr int throttle_int = 1000; ///1000 microseconds corresponds to 0% throttle
+constexpr float throttle_slope = 6.44;   // 10 us per percent throttle
+constexpr int throttle_int = 1171; ///1171 microseconds corresponds to 0% throttle
 constexpr int throttle_safe = 500; //to cutoff esc
 
 //aileron
@@ -169,12 +173,12 @@ constexpr float aileron_slope = 10.0f;   // microsseconds per degree of deflecti
 constexpr int aileron_int = 1500; // 1500 microseconds corresponds to neutral posi (0 degrees) deflection
 
 //elevator
-constexpr float elevator_slope = 10.0f;   
-constexpr int elevator_int = 1500; 
+constexpr float elevator_slope = -32.81;   
+constexpr int elevator_int = 1547; 
 
 // rudder
-constexpr float rudder_slope = 10.0f;
-constexpr int rudder_int = 1500;
+constexpr float rudder_slope = 12.32;
+constexpr int rudder_int = 1547;
 
 //PWM limits--------------------
 
@@ -182,10 +186,10 @@ constexpr int rudder_int = 1500;
 //Control Surface Hardware Limits
 constexpr float aileron_max_deflection_deg = 30.0f; /// maximum deflection in degrees for aileron
 constexpr float aileron_min_deflection_deg = -30.0f;   // minimum deflection in degrees for aileron
-constexpr float elevator_max_deflection_deg = 30.0f;
-constexpr float elevator_min_deflection_deg = -30.0f; 
-constexpr float rudder_max_deflection_deg = 30.0f;   
-constexpr float rudder_min_deflection_deg = -30.0f; 
+constexpr float elevator_max_deflection_deg = 15.0f;
+constexpr float elevator_min_deflection_deg = -10.0f; 
+constexpr float rudder_max_deflection_deg = 40.0f;   
+constexpr float rudder_min_deflection_deg = -40.0f; 
 //control surface hardware limits--------------------
 
 
