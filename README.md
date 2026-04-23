@@ -17,11 +17,12 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Area | Status | Notes |
 | --- | --- | --- |
 | Board support | Implemented | `adafruit_feather_esp32_v2` via PlatformIO |
-| IMU | Implemented | ICM-20948 over shared I2C, complementary filter for roll/pitch, gyro and level calibration helpers |
+| IMU | Implemented | ICM-20948 over shared I2C, complementary filter for roll/pitch/yaw (tilt-compensated magnetometer fusion), gyro/level/magnetometer calibration helpers |
 | Barometer | Implemented | BMP3XX over I2C |
 | GPS | Implemented | UART2 parser for GGA and RMC sentences |
 | Waypoint navigation | Implemented | Haversine distance, bearing, leg and mission progress |
 | Flight scheduler | Implemented | FreeRTOS tasks plus mode dispatcher |
+| NeoPixel status LED | Implemented | Built-in Feather NeoPixel cycles through active subsystem faults |
 | LoRa telemetry TX | Implemented | Raw binary telemetry packet sent periodically |
 | LoRa telemetry RX | Reference receiver sketch available | Arduino IDE receiver sketch provided for ESP32-WROOM DevKit under `test/arduino_lora_receiver` |
 | Manual / Stabilize / AltHold / Glide / Waypoint modes | Implemented | Runtime-selectable by RC mode PWM mapping |
@@ -58,7 +59,10 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 | Barometer (BMP3XX) | I2C | `SDA=22`, `SCL=20` | Shares the same mutex-protected sensor bus as the IMU |
 | GPS | UART2 | `TX=8`, `RX=7` | Configured for `115200` baud |
 | LoRa radio | SPI | `SCK=5`, `MOSI=19`, `MISO=21` | External SX127x-style radio expected |
-| LoRa control | GPIO | `CS=26=A0`, `RST=4=A5`, `IRQ=39=A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
+| LoRa control | GPIO | `CS = 26 = A0`, `RST =4 = A5`, `IRQ = 39 = A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
+| SD Card | SPI | `CS = 25 = A1` | SPI wiring same as LoRa |
+| Built-in status LED | NeoPixel | `PIN_NEOPIXEL` | Used for subsystem health / fault indication |
+#######TODO: Airspeed sensor
 
 The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
 
@@ -66,6 +70,8 @@ The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/senso
 - sets the bus clock to `400000 Hz`
 - guards IMU and barometer access with a FreeRTOS mutex
 - lets both sensor drivers retry initialization if a device is temporarily missing
+
+############ TODO: Write the same for SPI
 
 ### PWM Output Pins
 
@@ -98,11 +104,13 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 
 | Task | Period | Purpose |
 | --- | --- | --- |
-| `TaskIMURead` | `10 ms` | Reads ICM-20948 and updates filtered roll/pitch |
+| `TaskIMURead` | `10 ms` | Reads ICM-20948 and updates filtered roll/pitch/yaw |
 | `TaskBarometerRead` | `50 ms` | Reads barometer pressure and altitude |
 | `TaskGPSRead` | `50 ms` | Parses incoming GPS NMEA stream and updates navigation |
 | `TaskFlightControl` | `100 ms` | Reads RC input, selects flight mode, runs active mode |
 | `TaskTelemetryTx` | `500 ms` | Sends telemetry snapshot over LoRa |
+| `TaskSDLog` | `50 ms` | Logs telemetry snapshots to the SD card when enabled |
+| `TaskStatusLED` | `100 ms` | Updates the built-in NeoPixel based on current subsystem health |
 
 ### Main Data Flow
 
@@ -112,6 +120,45 @@ The main runtime lives in [`src/main.cpp`](src/main.cpp). The default Arduino `l
 4. The active flight mode computes control outputs.
 5. The mixer converts those commands into PWM outputs.
 6. A telemetry task packages the current state and sends it over LoRa.
+7. A status LED task cycles through active subsystem faults on the built-in NeoPixel.
+
+## Status LED
+
+The Feather ESP32 V2 built-in NeoPixel is used as a quick health indicator for major subsystems. The implementation lives in [`src/status/status_led.cpp`](src/status/status_led.cpp) and is driven by `TaskStatusLED` from [`src/main.cpp`](src/main.cpp).
+
+The LED cycles through every currently active fault instead of showing only one. If no tracked faults are active, it shows solid green.
+
+### Fault Color Map
+
+| Condition | LED behavior |
+| --- | --- |
+| GPS not healthy or no lock acquired | Solid red |
+| SD card not ready or no log file open | Blinking red |
+| LoRa not initialized | Solid yellow |
+| IMU not healthy | Solid magenta |
+| Barometer not healthy | Solid blue |
+| No active faults | Solid green |
+
+### Status LED Timing
+
+The timing and brightness are configurable in [`include/config.h`](include/config.h):
+
+- `STATUS_LED_TASK_PERIOD_MS`
+- `STATUS_LED_CYCLE_PERIOD_MS`
+- `STATUS_LED_BLINK_PERIOD_MS`
+- `STATUS_LED_BRIGHTNESS`
+
+Current behavior:
+
+- the LED task updates every `100 ms`
+- each active fault is shown for `1200 ms` before rotating to the next one
+- blinking faults toggle at `500 ms`
+
+### Notes
+
+- GPS fault indication intentionally treats "connected but not locked yet" as a fault, so the LED stays red until a usable fix is available.
+- SD status currently means the card mounted successfully and a log file is open. It does not yet detect every possible runtime write failure after startup.
+- LoRa and SD are only considered faults when their corresponding `LORA_LOGGING_ENABLED` or `SD_LOGGING_ENABLED` config flags are enabled.
 
 ## Sensor Behavior
 
@@ -136,15 +183,27 @@ The IMU path also now includes:
 - magnetometer reads stored in `IMUData_raw`
 - gyro bias calibration via `IMU_Calibrate_Gyro()`
 - level calibration helper via `IMU_Run_Level_Calibration(...)`
+- magnetometer hard/soft iron calibration helper via `IMU_Run_Mag_Calibration(...)`
 - startup calibration flags in `include/config.h`, disabled by default
 
-Current yaw is still not coming from tilt-compensated magnetometer fusion or an AHRS yaw estimator. The IMU currently provides roll and pitch only. The filtered `imu_data.yaw` is updated from `gps_data.heading` when a valid GPS lock exists and the aircraft is moving faster than `WAYPOINT_MIN_GROUND_SPEED_MPS`. If that GPS condition is not met, yaw is not recomputed from the IMU and simply retains its previous value.
+Yaw is estimated in the IMU path using gyro integration plus tilt-compensated magnetometer correction. This means `imu_data.yaw` is available without requiring GPS lock. GPS heading remains available as a separate navigation signal (`gps_data.heading`) and is still used by waypoint logic where appropriate.
+
+Magnetometer calibration parameters now live in `include/config.h`:
+
+- `IMU_MAG_OFFSET_X`, `IMU_MAG_OFFSET_Y`, `IMU_MAG_OFFSET_Z`
+- `IMU_MAG_SCALE_X`, `IMU_MAG_SCALE_Y`, `IMU_MAG_SCALE_Z`
+- `IMU_RUN_MAG_CALIBRATION` startup flag
+
+Important calibration note:
+
+- `IMU_RUN_MAG_CALIBRATION` should not be `true` at the same time as `IMU_RUN_STARTUP_GYRO_CALIBRATION` or `IMU_RUN_STARTUP_LEVEL_CALIBRATION` at startup.
 
 ### Barometer
 
 Current barometer driver:
 
 - Sensor family: BMP3XX
+- Sensor: BMP388
 - Bus: I2C
 - Output altitude from measured pressure using `SEALEVELPRESSURE_HPA`
 
@@ -157,6 +216,7 @@ Current GPS driver:
 - Interface: UART2
 - Baud: `115200`
 - Supported NMEA sentences: `GGA`, `RMC`
+- Sensor: HGLRC M100-5883
 
 What the firmware extracts:
 
@@ -167,6 +227,7 @@ What the firmware extracts:
 - local time with configurable UTC offset
 - ground speed
 - track heading
+- GPS Heading/Compass will only be available over I2C for HGLRC M100-5883
 
 The driver prints readable debug output when `GPS_DEBUG_OUTPUT_ENABLED` is set in `config.h`.
 
@@ -316,6 +377,97 @@ What it does:
 
 If your LoRa module is wired differently on the ESP32-WROOM DevKit, change the pin constants at the top of the sketch before flashing.
 
+## GCS Bridge and Dashboard
+
+The Ground Control Station tools live under [`test/gcs`](test/gcs):
+
+- [`test/gcs/gcs_bridge.py`](test/gcs/gcs_bridge.py): reads receiver serial telemetry and rebroadcasts packets as JSON over WebSocket
+- [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html): browser dashboard that displays telemetry and can send JSON commands
+
+### What the Bridge Does
+
+`gcs_bridge.py`:
+
+- reads the ESP32 LoRa receiver serial output line-by-line
+- groups telemetry fields into complete packet JSON objects
+- broadcasts each packet to connected WebSocket clients
+- forwards command JSON from WebSocket clients back to the receiver over serial
+
+### Install
+
+From the repo root:
+
+```powershell
+cd test/gcs
+python -m venv .venv
+```
+
+Activate the environment:
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```powershell
+pip install pyserial websockets
+```
+
+### Setup
+
+1. Connect the ESP32 receiver board to your computer over USB.
+2. Identify the serial port:
+
+```powershell
+python gcs_bridge.py --list-ports
+```
+
+3. Pick the correct port for your OS:
+
+- Windows example: `COM5`
+- Linux example: `/dev/ttyUSB0`
+- macOS example: `/dev/tty.usbserial-xxxx`
+
+### Usage
+
+Start the bridge from `test/gcs`:
+
+Linux example:
+
+```bash
+python gcs_bridge.py --port /dev/ttyUSB0
+```
+
+Windows example:
+
+```powershell
+python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+```
+
+With defaults, the WebSocket server listens on `ws://localhost:8765`.
+
+Open [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html) in a browser and connect it to:
+
+- `ws://localhost:8765` when the bridge runs locally
+- `ws://<bridge-host-ip>:8765` if the bridge is running on another machine
+
+### CLI Reference
+
+```text
+python gcs_bridge.py --port /dev/ttyUSB0
+python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+python gcs_bridge.py --list-ports
+```
+
 ## Receiver and RC Input
 
 This section is about flight-control RC input, not the LoRa telemetry receiver described above.
@@ -326,10 +478,6 @@ The firmware already has the following logic:
 - flight-mode PWM threshold selection
 
 However, the actual receiver backend is still placeholder code in [`src/hal/comms/rx_spektrum.cpp`](src/hal/comms/rx_spektrum.cpp):
-
-- `rx_init()` is not implemented
-- `rx_read()` is not implemented
-- raw PWM values are currently hard-coded test values
 
 So the control architecture is wired, but real RC input depends on finishing the Spektrum interface.
 
@@ -385,13 +533,14 @@ Key groups:
 - pin assignments
 - I2C bus pins and frequency
 - task periods and stack sizes
+- status LED timing and brightness
 - PID gains and limits
 - default flight mode
 - RC PWM thresholds for flight-mode switching
 - waypoint mission list
 - GPS timezone offset
 - LoRa settings
-- IMU body-frame signs, level offsets, and calibration flags
+- IMU body-frame signs, magnetometer offsets/scales, level offsets, and startup calibration flags
 
 ## Current Limitations
 
@@ -404,7 +553,6 @@ Known limitations:
 - failsafe logic is incomplete
 - telemetry RX command protocol is not implemented yet
 - telemetry uses raw binary struct layout instead of a stable serialized protocol
-- magnetometer data is read but not yet fused into yaw estimation
 - yaw control is not actively used in waypoint steering
 - no persistent configuration or parameter storage yet
 
@@ -422,7 +570,7 @@ Known limitations:
 ## [next steps/TODO]
 - finish the Spektrum RX backend and validate live RC mode switching
 - add yaw coordination or rudder mixing for cleaner turns
-- seperate imu_yaw and gps_heading
+- validate and tune magnetometer calibration values per airframe
 - sd card
 
 

@@ -6,6 +6,7 @@ struct IMUData_raw {
     float mag_x, mag_y, mag_z;
     float roll;
     float pitch;
+    float yaw;
     bool healthy; // True if sensor is connected and reading
 };
 
@@ -57,11 +58,11 @@ struct AirspeedData {
 
 
 struct RCData {
-    float aileron_pwm;
-    float elevator_pwm;
-    float throttle_pwm;
-    float rudder_pwm;
-    float flightmode_pwm;
+    unsigned int aileron_pwm;
+    unsigned int elevator_pwm;
+    unsigned int throttle_pwm;
+    unsigned int rudder_pwm;
+    unsigned int flightmode_pwm;
     bool healthy; 
 };
 

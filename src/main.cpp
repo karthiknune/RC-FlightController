@@ -16,6 +16,7 @@
 #include "logging/sd_logger.h"
 #include "nav/waypoint.h"
 #include "flight/home.h"
+#include "status/status_led.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
 IMUData_filtered imu_data = {};
@@ -45,16 +46,19 @@ void RunStartupIMUCalibrationIfEnabled() {
         float pitch_offset_deg = 0.0f;
         (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
     }
+
+    if (IMU_RUN_MAG_CALIBRATION) {
+        float offset_x = 0.0f, offset_y = 0.0f, offset_z = 0.0f;
+        float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
+        (void)IMU_Run_Mag_Calibration(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z);
+    }
 }
 
 void UpdateFilteredIMUData() {
     if (currentIMU.healthy) {
         imu_data.roll = currentIMU.roll;
         imu_data.pitch = currentIMU.pitch;
-    }
-
-    if (gps_data.lock_acquired && gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {    // GPS still provides the best heading until tilt-compensated mag fusion is added
-        imu_data.yaw = gps_data.heading;
+        imu_data.yaw = currentIMU.yaw;
     }
 }
 
@@ -237,8 +241,6 @@ void TaskFlightControl(void *pvParameters) {
     xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        rx_read();
-
         const FlightMode desired_mode = DetermineFlightMode();
         const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
         if (!g_flight_mode_initialized || effective_mode != active_flight_mode) {
@@ -293,6 +295,17 @@ void TaskSDLog(void *pvParameters) {
     }
 }
 
+void TaskStatusLED(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(STATUS_LED_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        StatusLED_Update();
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial); 
@@ -302,6 +315,8 @@ void setup() {
     digitalWrite(CS_PIN, HIGH);
     pinMode(SD_CS, OUTPUT);
     digitalWrite(SD_CS, HIGH);
+
+    StatusLED_Init();
     
     if (!SensorBus_Init()) {
         Serial.println("Sensor I2C bus init failed.");
@@ -320,6 +335,9 @@ void setup() {
     if (LORA_LOGGING_ENABLED) {        
         if (!lora_init()) {
             Serial.println("LoRa init failed.");
+        }
+        else {
+            Serial.println("LoRa init successful.");
         }
     }
     else {
@@ -412,6 +430,16 @@ void setup() {
             SD_LOG_TASK_CORE
         );
     }
+
+    xTaskCreatePinnedToCore(
+        TaskStatusLED,
+        "Status_LED_Task",
+        STATUS_LED_TASK_STACK_SIZE,
+        NULL,
+        STATUS_LED_TASK_PRIORITY,
+        NULL,
+        STATUS_LED_TASK_CORE
+    );
 }
 
 void loop() {
@@ -419,7 +447,7 @@ void loop() {
 
     if (IMU_DEBUG_OUTPUT_ENABLED) {
         if (currentIMU.healthy) {
-            Serial.printf("Roll: %6.2f | Pitch: %6.2f\n", currentIMU.roll, currentIMU.pitch);
+            Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
         }
     }
 
@@ -441,6 +469,11 @@ void loop() {
         } else {
             Serial.println("GPS reading unhealthy");
         }
+    }
+
+    if(RX_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("RC Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u | FlightMode PWM: %u\n",
+                      rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm);
     }
 
     delay(50); 
