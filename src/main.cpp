@@ -495,7 +495,7 @@ void loop() {
 
     if (GPS_DEBUG_OUTPUT_ENABLED) {
         if (gps_data.healthy) {
-            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading);
+            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f | Satellites: %d\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading, gps_data.satellites);
         } else {
             Serial.println("GPS reading unhealthy");
         }

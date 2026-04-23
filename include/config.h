@@ -34,7 +34,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 // LoRa-------------
 
 // SD Card Logger-------------
-constexpr bool SD_LOGGING_ENABLED = true;
+constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
