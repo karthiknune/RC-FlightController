@@ -64,8 +64,8 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
-constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
@@ -115,10 +115,9 @@ constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
-constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0;
-constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0;
-constexpr unsigned int FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0;
+constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
+constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1850;
+constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 2000;
 constexpr int BARO_TASK_PERIOD_MS = 50;
 constexpr int BARO_TASK_STACK_SIZE = 4096;
 constexpr int BARO_TASK_PRIORITY = 1;
@@ -138,12 +137,12 @@ constexpr bool PWM_DEBUG_OUTPUT_ENABLED = false;
 #define rudder_pin 14
 
 ///rx pins
-constexpr bool RX_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool RX_DEBUG_OUTPUT_ENABLED = false;
 #define USE_ESC
 #define USE_ELEVATOR
 #define USE_RUDDER
 //#define USE_AILERON
-#define rx_esc_pin 21
+#define rx_esc_pin 37
 #define rx_elevator_pin 32
 #define rx_rudder_pin 33
 #define rx_mode_pin 15
