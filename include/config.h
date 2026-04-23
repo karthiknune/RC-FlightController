@@ -102,6 +102,15 @@ constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
 //Barometer-------------
 
+//Airspeed-------------
+constexpr bool AIRSPEED_DEBUG_OUTPUT_ENABLED = false;
+constexpr int AIRSPEED_TASK_PERIOD_MS = 50;
+constexpr int AIRSPEED_TASK_STACK_SIZE = 4096;
+constexpr int AIRSPEED_TASK_PRIORITY = 1;
+constexpr int AIRSPEED_TASK_CORE = 1;
+constexpr uint8_t AIRSPEED_I2C_ADDRESS = 0x28; // MS4525DO default address
+//Airspeed-------------
+
 // I2C-------------
 constexpr int I2C_SDA_PIN = 22;
 constexpr int I2C_SCL_PIN = 20;

@@ -8,6 +8,7 @@
 #include "hal/sensors/baro.h"
 #include "hal/sensors/sensor_bus.h"
 #include "hal/sensors/gps.h"
+#include "hal/sensors/airspeed.h"
 #include "hal/comms/lora.h"
 #include "hal/comms/rx_spektrum.h"
 #include "hal/actuators/pwm_out.h"
@@ -21,6 +22,7 @@ IMUData_raw currentIMU; // Global variable to hold our sensor state
 IMUData_filtered imu_data = {};
 BarometerData baro_data = {};
 GPSData gps_data = {};  // Global variable to hold GPS state
+AirspeedData airspeed_data = {};
 FlightMode active_flight_mode = DEFAULT_FLIGHT_MODE;
 
 ///pid initialisations
@@ -145,6 +147,7 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.yaw = imu_data.yaw;
     snapshot.altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
     snapshot.des_altitude = navigation.get_target_altitude();
+    snapshot.airspeed = airspeed_data.healthy ? airspeed_data.airspeed_mps : 0.0f;
     snapshot.gps_lat = static_cast<float>(gps_data.latitude);
     snapshot.gps_long = static_cast<float>(gps_data.longitude);
     snapshot.gps_alt = gps_data.altitude;
@@ -193,6 +196,17 @@ void TaskBarometerRead(void *pvParameters) {
 
     for (;;) {
         Barometer_Read(baro_data);
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskAirspeedRead(void *pvParameters) {
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(AIRSPEED_TASK_PERIOD_MS);
+    xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        Airspeed_Read(airspeed_data);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
@@ -314,6 +328,7 @@ void setup() {
     IMU_Init();
     RunStartupIMUCalibrationIfEnabled();
     Barometer_Init();
+    Airspeed_Init();
     GPS_Init();
     navigation.restart_mission();
 
@@ -362,6 +377,16 @@ void setup() {
         BARO_TASK_PRIORITY,
         NULL,
         BARO_TASK_CORE
+    );
+
+    xTaskCreatePinnedToCore(
+        TaskAirspeedRead,
+        "Airspeed_Task",
+        AIRSPEED_TASK_STACK_SIZE,
+        NULL,
+        AIRSPEED_TASK_PRIORITY,
+        NULL,
+        AIRSPEED_TASK_CORE
     );
 
     xTaskCreatePinnedToCore(
@@ -423,6 +448,12 @@ void loop() {
     if (IMU_DEBUG_OUTPUT_ENABLED) {
         if (currentIMU.healthy) {
             Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
+        }
+    }
+
+    if (AIRSPEED_DEBUG_OUTPUT_ENABLED) {
+        if (airspeed_data.healthy) {
+            Serial.printf("Airspeed: %6.2f m/s | Pressure: %6.2f Pa\n", airspeed_data.airspeed_mps, airspeed_data.pressure_pa);
         }
     }
 

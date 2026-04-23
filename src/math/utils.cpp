@@ -14,7 +14,6 @@ namespace math {
     return value;
     }
 
-
     float wrap_heading_error(float heading_error_degrees) {
     while (heading_error_degrees > 180.0f) {
         heading_error_degrees -= 360.0f;
