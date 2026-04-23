@@ -310,9 +310,9 @@ void setup() {
     pwm_init();
     motormixer_init();
     rx_init();
-    // IMU_Init();
+    IMU_Init();
     RunStartupIMUCalibrationIfEnabled();
-    // Barometer_Init();
+    Barometer_Init();
     Airspeed_Init();
     GPS_Init();
     navigation.restart_mission();
@@ -341,25 +341,25 @@ void setup() {
         Serial.println("SD Logging Disabled by config.");
     }
 
-    // xTaskCreatePinnedToCore(
-    //     TaskIMURead,
-    //     "IMU_Task",
-    //     IMU_TASK_STACK_SIZE,
-    //     NULL,
-    //     IMU_TASK_PRIORITY,
-    //     NULL,
-    //     IMU_TASK_CORE
-    // );
+    xTaskCreatePinnedToCore(
+        TaskIMURead,
+        "IMU_Task",
+        IMU_TASK_STACK_SIZE,
+        NULL,
+        IMU_TASK_PRIORITY,
+        NULL,
+        IMU_TASK_CORE
+    );
 
-    // xTaskCreatePinnedToCore(
-    //     TaskBarometerRead,
-    //     "Baro_Task",
-    //     BARO_TASK_STACK_SIZE,
-    //     NULL,
-    //     BARO_TASK_PRIORITY,
-    //     NULL,
-    //     BARO_TASK_CORE
-    // );
+    xTaskCreatePinnedToCore(
+        TaskBarometerRead,
+        "Baro_Task",
+        BARO_TASK_STACK_SIZE,
+        NULL,
+        BARO_TASK_PRIORITY,
+        NULL,
+        BARO_TASK_CORE
+    );
 
     xTaskCreatePinnedToCore(
         TaskAirspeedRead,
