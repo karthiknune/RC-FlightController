@@ -6,10 +6,11 @@ class PIDController {
         float compute(float setpoint, float measured_value, float dt); //compute pid output
         void PIDreset();
 
-        float getkp(); 
+        float getkp();
         float getki();
         float getkd();
-    
+        float getLastOutput() const;
+
     private:
         //tuning params
         float kp;
@@ -19,4 +20,5 @@ class PIDController {
         float integral;
         float max_output;
         float max_integral;
+        float last_output;
 };
