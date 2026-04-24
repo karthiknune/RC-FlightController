@@ -23,7 +23,7 @@ void mode_stabilize_run() {
     float actual_roll = imu_data.roll;
     float actual_pitch = imu_data.pitch;
     //stick inputs
-    float des_roll = get_des_roll();
+    float des_roll = get_des_yaw();
     float des_pitch = get_des_pitch();
     float des_throttle = get_des_throttle();
 
@@ -31,12 +31,12 @@ void mode_stabilize_run() {
     float pitch = pitch_pid.compute(des_pitch, actual_pitch, flight_control_dt_seconds);
     float throttle = des_throttle;
 
-//   if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
-    // Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
-    //         target_roll,
-    //         actual_roll,
-    //         roll);
-//   }
+   if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
+     Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
+             des_roll,
+             actual_roll,
+             roll);
+   }
 
     motormixer_compute(throttle, roll, pitch, 0.0f); ///////////////change throttle tp rc_throttle pwm
 
