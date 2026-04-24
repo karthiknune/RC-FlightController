@@ -73,10 +73,6 @@ FlightMode ResolveFlightModeFallback(FlightMode requested_mode) {
 FlightMode DetermineFlightMode() {
     const float flight_mode_pwm = get_flight_mode_pwm();
 
-    if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f) {
-        return DEFAULT_FLIGHT_MODE;
-    }
-
     if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX) {
         return FlightMode::Manual;
     }
@@ -88,12 +84,7 @@ FlightMode DetermineFlightMode() {
     if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
         return FlightMode::AltHold;
     }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX) {
-        return FlightMode::Glide;
-    }
-
-    return FlightMode::Waypoint;
+    return FlightMode::Glide;
 }
 
 void InitializeFlightMode(FlightMode mode) {
@@ -472,8 +463,8 @@ void loop() {
     }
 
     if(RX_DEBUG_OUTPUT_ENABLED) {
-        Serial.printf("RC Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u | FlightMode PWM: %u\n",
-                      rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm);
+        Serial.printf("RC Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u | FlightMode PWM: %u (Mode: %d)\n",
+                      rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm, (int)DetermineFlightMode());
     }
 
     delay(50); 
