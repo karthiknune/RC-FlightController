@@ -47,6 +47,14 @@ void PIDController::PIDreset() {  //call before every controlled flight
     integral = 0.0;
 }
 
+void PIDController::setTuning(float kp, float ki, float kd) {
+    this->kp = kp;
+    this->ki = ki;
+    this->kd = kd;
+    PIDreset();
+    last_output = 0.0f;
+}
+
 
 float PIDController::getLastOutput() const {
     return last_output;
