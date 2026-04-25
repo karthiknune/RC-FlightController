@@ -116,12 +116,12 @@ void SD_Logger_WriteHeader() {
 
     DeselectLoRaOnSharedSPI();
     logFile.println(
-        "roll,pitch,yaw,altitude,des_altitude,gps_lat,gps_long,gps_alt,gps_speed,gps_heading,"
+        "roll,pitch,yaw,des_roll,des_pitch,des_yaw,des_throttle,altitude,des_altitude,"
+        "gps_lat,gps_long,gps_alt,gps_speed,gps_heading,"
         "gps_sats,gps_fix_quality,gps_lock_acquired,baro_altitude,flightmode,"
         "waypoint_distance,waypoint_heading,waypoint_target_alt,waypoint_leg_progress,"
         "waypoint_mission_progress,waypoint_index,waypoint_total,waypoint_mission_complete,"
-        "waypoint_target_lat,waypoint_target_lon,"
-        "des_roll,des_pitch,des_yaw,des_throttle,airspeed,"
+        "waypoint_target_lat,waypoint_target_lon,airspeed,"
         "imu_healthy,baro_healthy,gps_healthy,rx_healthy,armed,"
         "roll_pid_out,pitch_pid_out,yaw_pid_out,"
         "rx_throttle_pwm,rx_aileron_pwm,rx_elevator_pwm,rx_rudder_pwm,rx_mode_pwm"

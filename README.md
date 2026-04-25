@@ -320,7 +320,7 @@ The current telemetry implementation:
 
 - sends a raw in-memory `telemetrydata` struct
 - uses a single LoRa packet per snapshot
-- currently sends `128` bytes per packet on ESP32
+- currently sends `168` bytes per packet on ESP32
 - does not add framing, versioning, checksums, or serialization beyond the native C++ layout
 
 That means the ground station must decode the exact same field order and 32-bit `float` / `int` layout to interpret packets correctly.
@@ -365,7 +365,7 @@ The receiver sketch expects:
 - `915 MHz`
 - sync word `0xF3`
 - spreading factor `7`
-- payload size `128 bytes`
+- payload size `168 bytes`
 - serial monitor speed `115200`
 
 What it does:
@@ -468,6 +468,48 @@ python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
 python gcs_bridge.py --list-ports
 ```
 
+## Flight Log Viewer
+
+A self-contained browser tool for analysing SD card logs from the flight controller lives at [`test/rc_log_viewer.html`](test/rc_log_viewer.html).
+
+Open the file directly in Chrome, Firefox, or Edge — no server, no install, no internet connection required.
+
+### How to Use
+
+1. Pull the SD card from the Feather and copy the CSV log file to your computer.
+2. Open `test/rc_log_viewer.html` in a browser.
+3. Drag and drop the CSV onto the upload zone, or click to browse for the file.
+4. Set the **Sample rate** in the top-right to match the rate you configured in firmware (default `10 Hz`).
+
+### Tabs
+
+| Tab | What it shows |
+| --- | --- |
+| **Dashboard** | Stat cards (duration, airspeed, altitude, distance, GPS sats), primary attitude chart (roll/pitch/yaw), altitude chart, GPS flight path map, desired vs actual flight path, airspeed vs GPS speed, sensor health summary, flight mode timeline |
+| **Presets** | Grouped one-click plots: Attitude (roll/pitch/yaw, desired vs actual), Altitude, Speed, PID outputs, RC inputs, GPS, Navigation |
+| **Custom Plot** | Pick any combination of log fields; Multi-Axis / Single Axis / Normalize modes; drag a Y-axis label to pan it, scroll wheel to zoom, double-click to reset |
+| **Sensor Health** | Sensor status gauges (IMU, baro, GPS, RX), GPS quality metrics, altitude source comparison, mission progress, PID output charts, RC stick PWM charts |
+
+### Expected Log Fields
+
+The viewer auto-detects whatever columns are present in the CSV. It works best with these field names (the names the SD logger uses):
+
+```
+roll  pitch  yaw  des_roll  des_pitch  des_yaw  des_throttle
+altitude  des_altitude  baro_altitude
+gps_lat  gps_long  gps_alt  gps_speed  gps_heading
+gps_sats  gps_fix_quality  gps_lock_acquired
+airspeed  flightmode  armed
+waypoint_distance  waypoint_heading  waypoint_target_lat  waypoint_target_lon
+waypoint_target_alt  waypoint_leg_progress  waypoint_mission_progress
+waypoint_index  waypoint_total  waypoint_mission_complete
+imu_healthy  baro_healthy  gps_healthy  rx_healthy
+roll_pid_out  pitch_pid_out  yaw_pid_out
+rx_throttle_pwm  rx_aileron_pwm  rx_elevator_pwm  rx_rudder_pwm  rx_mode_pwm
+```
+
+Any columns not in the list above still appear in Custom Plot and can be plotted freely.
+
 ## Receiver and RC Input
 
 This section is about flight-control RC input, not the LoRa telemetry receiver described above.
@@ -502,6 +544,7 @@ src/
 
 test/
   arduino_lora_receiver/ Arduino IDE LoRa receiver for ESP32-WROOM DevKit
+  rc_log_viewer.html     Standalone browser tool for analysing SD card flight logs
 ```
 
 ## Build, Upload, and Monitor

@@ -4,12 +4,12 @@
 
 // ESP32-WROOM DevKit + SX1276/SX1278 wiring.
 // Change these only if your receiver module is wired differently.
-constexpr int SCK_PIN = 18;
-constexpr int MISO_PIN = 19;
-constexpr int MOSI_PIN = 23;
-constexpr int CS_PIN = 5;
+constexpr int SCK_PIN = 5;
+constexpr int MOSI_PIN = 19;
+constexpr int MISO_PIN = 21;
+constexpr int CS_PIN = 26;
 constexpr int RST_PIN = 4;
-constexpr int IRQ_PIN = 2;
+constexpr int IRQ_PIN = 39;
 
 constexpr long LORA_FREQ = 915E6;
 constexpr uint8_t SYNC_WORD = 0xF3;
@@ -49,9 +49,22 @@ struct TelemetryPacket {
   int32_t waypoint_index;
   int32_t waypoint_total;
   int32_t waypoint_mission_complete;
+  uint8_t imu_healthy;
+  uint8_t baro_healthy;
+  uint8_t gps_healthy;
+  uint8_t rx_healthy;
+  uint8_t armed;
+  float roll_pid_out;
+  float pitch_pid_out;
+  float yaw_pid_out;
+  float rx_throttle_pwm;
+  float rx_aileron_pwm;
+  float rx_elevator_pwm;
+  float rx_rudder_pwm;
+  float rx_mode_pwm;
 };
 
-static_assert(sizeof(TelemetryPacket) == 128, "Telemetry packet size mismatch");
+static_assert(sizeof(TelemetryPacket) == 168, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
 
