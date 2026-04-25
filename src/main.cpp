@@ -43,10 +43,11 @@ PIDTuningValues g_roll_pid_tuning = {roll_kp, roll_ki, roll_kd};
 PIDTuningValues g_pitch_pid_tuning = {pitch_kp, pitch_ki, pitch_kd};
 PIDTuningValues g_yaw_pid_tuning = {yaw_kp, yaw_ki, yaw_kd};
 LoRaPIDCommandPacket g_pending_pid_command = {};
-bool g_pending_pid_command_valid = false;
+volatile bool g_pending_pid_command_valid = false;
 LoRaPIDAckPacket g_last_pid_ack = {};
-bool g_last_pid_ack_valid = false;
+volatile bool g_last_pid_ack_valid = false;
 portMUX_TYPE g_pid_command_lock = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE g_tuning_lock = portMUX_INITIALIZER_UNLOCKED;
 
 bool IsPIDTuningFinite(const PIDTuningValues &tuning) {
     return isfinite(tuning.kp) && isfinite(tuning.ki) && isfinite(tuning.kd);
@@ -94,8 +95,10 @@ void SetControllerTuning(PIDController &controller,
                          PIDTuningValues &runtime_tuning,
                          const PIDTuningValues &new_tuning,
                          const char *axis_name) {
+    portENTER_CRITICAL(&g_tuning_lock);
     runtime_tuning = new_tuning;
     controller.setTuning(new_tuning.kp, new_tuning.ki, new_tuning.kd);
+    portEXIT_CRITICAL(&g_tuning_lock);
     Serial.printf("[PID] %s updated to Kp=%.3f Ki=%.3f Kd=%.3f\n",
                   axis_name,
                   new_tuning.kp,
@@ -204,18 +207,28 @@ void ApplyPendingPIDCommandIfNeeded() {
     ack.sequence = packet.sequence;
     ack.axis_mask = packet.axis_mask;
     ack.status = static_cast<uint8_t>(LoRaPIDAckStatus::Applied);
+
+    portENTER_CRITICAL(&g_tuning_lock);
     ack.roll = g_roll_pid_tuning;
     ack.pitch = g_pitch_pid_tuning;
     ack.yaw = g_yaw_pid_tuning;
+    portEXIT_CRITICAL(&g_tuning_lock);
 
     CacheLastPIDAck(ack);
     SendPIDAck(ack, "applied");
 
     if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
+        PIDTuningValues roll_copy, pitch_copy, yaw_copy;
+        portENTER_CRITICAL(&g_tuning_lock);
+        roll_copy = g_roll_pid_tuning;
+        pitch_copy = g_pitch_pid_tuning;
+        yaw_copy = g_yaw_pid_tuning;
+        portEXIT_CRITICAL(&g_tuning_lock);
+
         if (SD_Logger_SavePIDConfig(
-                g_roll_pid_tuning.kp, g_roll_pid_tuning.ki, g_roll_pid_tuning.kd,
-                g_pitch_pid_tuning.kp, g_pitch_pid_tuning.ki, g_pitch_pid_tuning.kd,
-                g_yaw_pid_tuning.kp, g_yaw_pid_tuning.ki, g_yaw_pid_tuning.kd)) {
+                roll_copy.kp, roll_copy.ki, roll_copy.kd,
+                pitch_copy.kp, pitch_copy.ki, pitch_copy.kd,
+                yaw_copy.kp, yaw_copy.ki, yaw_copy.kd)) {
             Serial.println("[SD] Updated PID config saved to pid_config.json");
         } else {
             Serial.println("[SD] Failed to save PID config to SD card.");
@@ -358,6 +371,8 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll_pid_out  = roll_pid.getLastOutput();
     snapshot.pitch_pid_out = pitch_pid.getLastOutput();
     snapshot.yaw_pid_out   = yaw_pid.getLastOutput();
+
+    portENTER_CRITICAL(&g_tuning_lock);
     snapshot.roll_pid_kp = roll_pid.getkp();
     snapshot.roll_pid_ki = roll_pid.getki();
     snapshot.roll_pid_kd = roll_pid.getkd();
@@ -373,6 +388,7 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.headingerror_pid_kp = headingerror_pid.getkp();
     snapshot.headingerror_pid_ki = headingerror_pid.getki();
     snapshot.headingerror_pid_kd = headingerror_pid.getkd();
+    portEXIT_CRITICAL(&g_tuning_lock);
 
     snapshot.rx_throttle_pwm = rc_data.throttle_pwm;
     snapshot.rx_aileron_pwm  = rc_data.aileron_pwm;
