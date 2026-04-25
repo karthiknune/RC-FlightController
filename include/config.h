@@ -31,6 +31,10 @@ constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
 constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
 constexpr int TELEMETRY_TASK_PRIORITY = 1;
 constexpr int TELEMETRY_TASK_CORE = 1;
+constexpr int LORA_RX_TASK_PERIOD_MS = 20;
+constexpr int LORA_RX_TASK_STACK_SIZE = 4096;
+constexpr int LORA_RX_TASK_PRIORITY = 1;
+constexpr int LORA_RX_TASK_CORE = 0;
 // LoRa-------------
 
 // SD Card Logger-------------

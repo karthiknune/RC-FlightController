@@ -5,6 +5,7 @@ class PIDController {
         PIDController(float kp, float ki, float kd, float max_output, float max_integral); //constructor
         float compute(float setpoint, float measured_value, float dt); //compute pid output
         void PIDreset();
+        void setTuning(float kp, float ki, float kd);
 
         float getkp();
         float getki();
