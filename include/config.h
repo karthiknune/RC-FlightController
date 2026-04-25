@@ -195,7 +195,7 @@ constexpr int rudder_int = 1547;
 constexpr float aileron_max_deflection_deg = 30.0f; /// maximum deflection in degrees for aileron
 constexpr float aileron_min_deflection_deg = -30.0f;   // minimum deflection in degrees for aileron
 constexpr float elevator_max_deflection_deg = 15.0f;
-constexpr float elevator_min_deflection_deg = -10.0f; 
+constexpr float elevator_min_deflection_deg = -15.0f; 
 constexpr float rudder_max_deflection_deg = 40.0f;   
 constexpr float rudder_min_deflection_deg = -40.0f; 
 //control surface hardware limits--------------------

@@ -467,5 +467,10 @@ void loop() {
                       rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm, (int)DetermineFlightMode());
     }
 
-    delay(50); 
+    if(PWM_DEBUG_OUTPUT_ENABLED) {
+        Serial.printf("PWM Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u\n",
+                        ledcRead(esc_channel), ledcRead(elevator_channel), ledcRead(aileron_channel), ledcRead(rudder_channel));
+    }
+
+    delay(100); 
 }
