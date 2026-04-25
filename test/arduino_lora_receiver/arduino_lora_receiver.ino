@@ -4,7 +4,7 @@
 
 // ESP32-WROOM DevKit + SX1276/SX1278 wiring.
 // Change these only if your receiver module is wired differently.
-constexpr int SCK_PIN = 5;
+constexpr int SCK_PIN = 5;  // these pins are for ESP32 Feather used for LoRa receiver
 constexpr int MOSI_PIN = 19;
 constexpr int MISO_PIN = 21;
 constexpr int CS_PIN = 26;
