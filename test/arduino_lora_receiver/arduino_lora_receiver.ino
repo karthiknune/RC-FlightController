@@ -24,7 +24,7 @@ constexpr int IRQ_PIN = 39;
 constexpr long LORA_FREQ = 915E6;
 constexpr uint8_t SYNC_WORD = 0xF3;
 constexpr int SPREADING_FACTOR = 7;
-constexpr unsigned long SERIAL_BAUD = 115200UL;
+constexpr unsigned long SERIAL_BAUD = 921600UL;
 constexpr unsigned long PID_RETRY_INTERVAL_MS = 750UL;
 constexpr uint32_t MAX_PID_RETRY_ATTEMPTS = 10UL;
 constexpr size_t SERIAL_LINE_BUFFER_SIZE = 160U;
@@ -115,6 +115,21 @@ struct TelemetryPacket {
   float roll_pid_out;
   float pitch_pid_out;
   float yaw_pid_out;
+  float roll_pid_kp;
+  float roll_pid_ki;
+  float roll_pid_kd;
+  float pitch_pid_kp;
+  float pitch_pid_ki;
+  float pitch_pid_kd;
+  float yaw_pid_kp;
+  float yaw_pid_ki;
+  float yaw_pid_kd;
+  float altitude_pid_kp;
+  float altitude_pid_ki;
+  float altitude_pid_kd;
+  float headingerror_pid_kp;
+  float headingerror_pid_ki;
+  float headingerror_pid_kd;
   float rx_throttle_pwm;
   float rx_aileron_pwm;
   float rx_elevator_pwm;
@@ -131,7 +146,7 @@ struct PendingPIDCommandState {
 
 static_assert(sizeof(LoRaPIDCommandPacket) == 44, "PID command packet size mismatch");
 static_assert(sizeof(LoRaPIDAckPacket) == 44, "PID ack packet size mismatch");
-static_assert(sizeof(TelemetryPacket) == 168, "Telemetry packet size mismatch");
+static_assert(sizeof(TelemetryPacket) == 228, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
 uint8_t g_next_pid_sequence = 1U;
@@ -216,6 +231,18 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
       static_cast<long>(packet.waypoint_total),
       static_cast<long>(packet.waypoint_mission_complete));
 
+  Serial.println();
+
+  Serial.printf(
+      "ActivePID roll_p=%.3f roll_i=%.3f roll_d=%.3f pitch_p=%.3f pitch_i=%.3f pitch_d=%.3f yaw_p=%.3f yaw_i=%.3f yaw_d=%.3f\n",
+      packet.roll_pid_kp, packet.roll_pid_ki, packet.roll_pid_kd,
+      packet.pitch_pid_kp, packet.pitch_pid_ki, packet.pitch_pid_kd,
+      packet.yaw_pid_kp, packet.yaw_pid_ki, packet.yaw_pid_kd);
+
+  Serial.printf(
+      "NavPID    alt_p=%.3f alt_i=%.3f alt_d=%.3f hdg_p=%.3f hdg_i=%.3f hdg_d=%.3f\n",
+      packet.altitude_pid_kp, packet.altitude_pid_ki, packet.altitude_pid_kd,
+      packet.headingerror_pid_kp, packet.headingerror_pid_ki, packet.headingerror_pid_kd);
   Serial.println();
 }
 

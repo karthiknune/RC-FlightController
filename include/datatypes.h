@@ -111,22 +111,22 @@ struct telemetrydata{
     float roll_pid_out;
     float pitch_pid_out;
     float yaw_pid_out;
-    // // Active PID tuning gains
-    // float roll_pid_kp;
-    // float roll_pid_ki;
-    // float roll_pid_kd;
-    // float pitch_pid_kp;
-    // float pitch_pid_ki;
-    // float pitch_pid_kd;
-    // float yaw_pid_kp;
-    // float yaw_pid_ki;
-    // float yaw_pid_kd;
-    // float altitude_pid_kp;
-    // float altitude_pid_ki;
-    // float altitude_pid_kd;
-    // float headingerror_pid_kp;
-    // float headingerror_pid_ki;
-    // float headingerror_pid_kd;
+    // Active PID tuning gains
+    float roll_pid_kp;
+    float roll_pid_ki;
+    float roll_pid_kd;
+    float pitch_pid_kp;
+    float pitch_pid_ki;
+    float pitch_pid_kd;
+    float yaw_pid_kp;
+    float yaw_pid_ki;
+    float yaw_pid_kd;
+    float altitude_pid_kp;
+    float altitude_pid_ki;
+    float altitude_pid_kd;
+    float headingerror_pid_kp;
+    float headingerror_pid_ki;
+    float headingerror_pid_kd;
     // raw RX PWM inputs
     float rx_throttle_pwm;
     float rx_aileron_pwm;

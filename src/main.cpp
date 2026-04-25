@@ -108,6 +108,19 @@ void LoadPIDTuningsFromConfig() {
     SetControllerTuning(roll_pid, g_roll_pid_tuning, {roll_kp, roll_ki, roll_kd}, "Roll");
     SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {pitch_kp, pitch_ki, pitch_kd}, "Pitch");
     SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {yaw_kp, yaw_ki, yaw_kd}, "Yaw");
+
+    if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
+        float r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd;
+        if (SD_Logger_LoadPIDConfig(r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd)) {
+            Serial.println("Valid pid_config.json found. Applying saved PID values...");
+            SetControllerTuning(roll_pid, g_roll_pid_tuning, {r_kp, r_ki, r_kd}, "Roll");
+            SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {p_kp, p_ki, p_kd}, "Pitch");
+            SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {y_kp, y_ki, y_kd}, "Yaw");
+        } else {
+            Serial.println("No valid pid_config.json found on SD card. Proceeding with defaults.");
+        }
+    }
+
     PrintPIDTuning("Roll", g_roll_pid_tuning);
     PrintPIDTuning("Pitch", g_pitch_pid_tuning);
     PrintPIDTuning("Yaw", g_yaw_pid_tuning);
@@ -197,6 +210,17 @@ void ApplyPendingPIDCommandIfNeeded() {
 
     CacheLastPIDAck(ack);
     SendPIDAck(ack, "applied");
+
+    if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
+        if (SD_Logger_SavePIDConfig(
+                g_roll_pid_tuning.kp, g_roll_pid_tuning.ki, g_roll_pid_tuning.kd,
+                g_pitch_pid_tuning.kp, g_pitch_pid_tuning.ki, g_pitch_pid_tuning.kd,
+                g_yaw_pid_tuning.kp, g_yaw_pid_tuning.ki, g_yaw_pid_tuning.kd)) {
+            Serial.println("[SD] Updated PID config saved to pid_config.json");
+        } else {
+            Serial.println("[SD] Failed to save PID config to SD card.");
+        }
+    }
 }
 
 void RunStartupIMUCalibrationIfEnabled() {
@@ -334,21 +358,21 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll_pid_out  = roll_pid.getLastOutput();
     snapshot.pitch_pid_out = pitch_pid.getLastOutput();
     snapshot.yaw_pid_out   = yaw_pid.getLastOutput();
-    // snapshot.roll_pid_kp = roll_pid.getkp();
-    // snapshot.roll_pid_ki = roll_pid.getki();
-    // snapshot.roll_pid_kd = roll_pid.getkd();
-    // snapshot.pitch_pid_kp = pitch_pid.getkp();
-    // snapshot.pitch_pid_ki = pitch_pid.getki();
-    // snapshot.pitch_pid_kd = pitch_pid.getkd();
-    // snapshot.yaw_pid_kp = yaw_pid.getkp();
-    // snapshot.yaw_pid_ki = yaw_pid.getki();
-    // snapshot.yaw_pid_kd = yaw_pid.getkd();
-    // snapshot.altitude_pid_kp = altitude_pid.getkp();
-    // snapshot.altitude_pid_ki = altitude_pid.getki();
-    // snapshot.altitude_pid_kd = altitude_pid.getkd();
-    // snapshot.headingerror_pid_kp = headingerror_pid.getkp();
-    // snapshot.headingerror_pid_ki = headingerror_pid.getki();
-    // snapshot.headingerror_pid_kd = headingerror_pid.getkd();
+    snapshot.roll_pid_kp = roll_pid.getkp();
+    snapshot.roll_pid_ki = roll_pid.getki();
+    snapshot.roll_pid_kd = roll_pid.getkd();
+    snapshot.pitch_pid_kp = pitch_pid.getkp();
+    snapshot.pitch_pid_ki = pitch_pid.getki();
+    snapshot.pitch_pid_kd = pitch_pid.getkd();
+    snapshot.yaw_pid_kp = yaw_pid.getkp();
+    snapshot.yaw_pid_ki = yaw_pid.getki();
+    snapshot.yaw_pid_kd = yaw_pid.getkd();
+    snapshot.altitude_pid_kp = altitude_pid.getkp();
+    snapshot.altitude_pid_ki = altitude_pid.getki();
+    snapshot.altitude_pid_kd = altitude_pid.getkd();
+    snapshot.headingerror_pid_kp = headingerror_pid.getkp();
+    snapshot.headingerror_pid_ki = headingerror_pid.getki();
+    snapshot.headingerror_pid_kd = headingerror_pid.getkd();
 
     snapshot.rx_throttle_pwm = rc_data.throttle_pwm;
     snapshot.rx_aileron_pwm  = rc_data.aileron_pwm;
@@ -571,7 +595,6 @@ void setup() {
     motormixer_init();
     rx_init();
     arming_init();
-    LoadPIDTuningsFromConfig();
     IMU_Init();
     RunStartupIMUCalibrationIfEnabled();
     Barometer_Init();
@@ -605,6 +628,8 @@ void setup() {
     else {
         Serial.println("SD Logging Disabled by config.");
     }
+
+    LoadPIDTuningsFromConfig();
 
     xTaskCreatePinnedToCore(
         TaskIMURead,

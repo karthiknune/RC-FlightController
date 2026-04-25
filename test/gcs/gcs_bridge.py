@@ -56,6 +56,12 @@ PATTERNS = {
         r'WPTarget\s+lat=(-?[\d.]+)\s+lon=(-?[\d.]+)\s+alt=(-?[\d.]+)\s+leg=(-?[\d.]+)\s+miss=(-?[\d.]+)'),
     # Failsafe  fs=0  (NEW — from patch)
     'failsafe': re.compile(r'Failsafe\s+fs=(-?[\d.]+)'),
+    # ActivePID roll_p=...
+    'active_pid': re.compile(
+        r'ActivePID\s+roll_p=(-?[\d.]+)\s+roll_i=(-?[\d.]+)\s+roll_d=(-?[\d.]+)\s+pitch_p=(-?[\d.]+)\s+pitch_i=(-?[\d.]+)\s+pitch_d=(-?[\d.]+)\s+yaw_p=(-?[\d.]+)\s+yaw_i=(-?[\d.]+)\s+yaw_d=(-?[\d.]+)'),
+    # NavPID alt_p=...
+    'nav_pid': re.compile(
+        r'NavPID\s+alt_p=(-?[\d.]+)\s+alt_i=(-?[\d.]+)\s+alt_d=(-?[\d.]+)\s+hdg_p=(-?[\d.]+)\s+hdg_i=(-?[\d.]+)\s+hdg_d=(-?[\d.]+)'),
 }
 
 
@@ -137,6 +143,23 @@ def parse_line(line: str, packet: dict) -> bool:
     m = PATTERNS['failsafe'].search(line)
     if m:
         packet.update({'failsafe_status': float(m.group(1))})
+        return False
+
+    m = PATTERNS['active_pid'].search(line)
+    if m:
+        packet.update({
+            'roll_pid_kp': float(m.group(1)), 'roll_pid_ki': float(m.group(2)), 'roll_pid_kd': float(m.group(3)),
+            'pitch_pid_kp': float(m.group(4)), 'pitch_pid_ki': float(m.group(5)), 'pitch_pid_kd': float(m.group(6)),
+            'yaw_pid_kp': float(m.group(7)), 'yaw_pid_ki': float(m.group(8)), 'yaw_pid_kd': float(m.group(9)),
+        })
+        return False
+
+    m = PATTERNS['nav_pid'].search(line)
+    if m:
+        packet.update({
+            'altitude_pid_kp': float(m.group(1)), 'altitude_pid_ki': float(m.group(2)), 'altitude_pid_kd': float(m.group(3)),
+            'headingerror_pid_kp': float(m.group(4)), 'headingerror_pid_ki': float(m.group(5)), 'headingerror_pid_kd': float(m.group(6)),
+        })
         return False
 
     return False

@@ -204,3 +204,57 @@ void SD_Logger_CloseLog() {
 bool SD_Logger_IsReady() {
     return g_sd_card_ready && static_cast<bool>(logFile);
 }
+
+bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
+                             float p_kp, float p_ki, float p_kd,
+                             float y_kp, float y_ki, float y_kd) {
+    if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
+        return false;
+    }
+    DeselectLoRaOnSharedSPI();
+
+    if (SD.exists("/pid_config.json")) {
+        SD.remove("/pid_config.json");
+    }
+
+    File file = SD.open("/pid_config.json", FILE_WRITE);
+    if (!file) {
+        SPIBus_Unlock();
+        return false;
+    }
+
+    file.printf("{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f]}\n",
+                r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd);
+    file.close();
+    SPIBus_Unlock();
+    return true;
+}
+
+bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
+                             float &p_kp, float &p_ki, float &p_kd,
+                             float &y_kp, float &y_ki, float &y_kd) {
+    if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
+        return false;
+    }
+    DeselectLoRaOnSharedSPI();
+
+    if (!SD.exists("/pid_config.json")) {
+        SPIBus_Unlock();
+        return false;
+    }
+
+    File file = SD.open("/pid_config.json", FILE_READ);
+    if (!file) {
+        SPIBus_Unlock();
+        return false;
+    }
+
+    String content = file.readStringUntil('\n');
+    file.close();
+    SPIBus_Unlock();
+
+    int parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f]}",
+                        &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd, &y_kp, &y_ki, &y_kd);
+    
+    return (parsed == 9);
+}
