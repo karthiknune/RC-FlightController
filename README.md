@@ -71,7 +71,12 @@ The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/senso
 - guards IMU and barometer access with a FreeRTOS mutex
 - lets both sensor drivers retry initialization if a device is temporarily missing
 
-############ TODO: Write the same for SPI
+The shared SPI layer in [`src/hal/comms/spi_bus.cpp`](src/hal/comms/spi_bus.cpp):
+
+- initializes the SPI bus on `SCK=5`, `MOSI=19`, `MISO=21`
+- sets a unified bus clock to `10000000 Hz` (10 MHz) for stability across devices
+- guards LoRa radio and SD card logger access with a FreeRTOS mutex
+- enforces safe peripheral deselection before driver accesses to prevent bus collisions
 
 ### PWM Output Pins
 
@@ -133,9 +138,10 @@ The LED cycles through every currently active fault instead of showing only one.
 | Condition | LED behavior |
 | --- | --- |
 | GPS not healthy or no lock acquired | Solid red |
-| SD card not ready or no log file open | Blinking red |
-| LoRa not initialized | Solid yellow |
-| IMU not healthy | Solid magenta |
+| SD card not ready or no log file open | Blinking white |
+| LoRa not initialized | Solid yellow/orange |
+| Airspeed not healthy | Blinking orange |
+| IMU not healthy | Solid purple |
 | Barometer not healthy | Solid blue |
 | No active faults | Solid green |
 
@@ -615,5 +621,3 @@ Known limitations:
 - add yaw coordination or rudder mixing for cleaner turns
 - validate and tune magnetometer calibration values per airframe
 - sd card
-
-
