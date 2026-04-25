@@ -124,6 +124,11 @@ void SD_Logger_WriteHeader() {
         "waypoint_target_lat,waypoint_target_lon,airspeed,"
         "imu_healthy,baro_healthy,gps_healthy,rx_healthy,armed,"
         "roll_pid_out,pitch_pid_out,yaw_pid_out,"
+        "roll_pid_kp,roll_pid_ki,roll_pid_kd,"
+        "pitch_pid_kp,pitch_pid_ki,pitch_pid_kd,"
+        "yaw_pid_kp,yaw_pid_ki,yaw_pid_kd,"
+        "altitude_pid_kp,altitude_pid_ki,altitude_pid_kd,"
+        "headingerror_pid_kp,headingerror_pid_ki,headingerror_pid_kd,"
         "rx_throttle_pwm,rx_aileron_pwm,rx_elevator_pwm,rx_rudder_pwm,rx_mode_pwm"
     );
     logFile.flush(); // Ensure header is written immediately
@@ -175,6 +180,21 @@ void SD_Logger_LogData(const telemetrydata& data) {
     logFile.print(data.roll_pid_out, 2); logFile.print(",");
     logFile.print(data.pitch_pid_out, 2); logFile.print(",");
     logFile.print(data.yaw_pid_out, 2); logFile.print(",");
+    logFile.print(data.roll_pid_kp, 3); logFile.print(",");
+    logFile.print(data.roll_pid_ki, 3); logFile.print(",");
+    logFile.print(data.roll_pid_kd, 3); logFile.print(",");
+    logFile.print(data.pitch_pid_kp, 3); logFile.print(",");
+    logFile.print(data.pitch_pid_ki, 3); logFile.print(",");
+    logFile.print(data.pitch_pid_kd, 3); logFile.print(",");
+    logFile.print(data.yaw_pid_kp, 3); logFile.print(",");
+    logFile.print(data.yaw_pid_ki, 3); logFile.print(",");
+    logFile.print(data.yaw_pid_kd, 3); logFile.print(",");
+    logFile.print(data.altitude_pid_kp, 3); logFile.print(",");
+    logFile.print(data.altitude_pid_ki, 3); logFile.print(",");
+    logFile.print(data.altitude_pid_kd, 3); logFile.print(",");
+    logFile.print(data.headingerror_pid_kp, 3); logFile.print(",");
+    logFile.print(data.headingerror_pid_ki, 3); logFile.print(",");
+    logFile.print(data.headingerror_pid_kd, 3); logFile.print(",");
     logFile.print(data.rx_throttle_pwm, 0); logFile.print(",");
     logFile.print(data.rx_aileron_pwm, 0); logFile.print(",");
     logFile.print(data.rx_elevator_pwm, 0); logFile.print(",");

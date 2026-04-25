@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// ESP32-WROOM DevKit + SX1276/SX1278 wiring.
+// ESP32-Feather + SX1276/SX1278 wiring.
 // Change these only if your receiver module is wired differently.
 constexpr int SCK_PIN = 5;
 constexpr int MOSI_PIN = 19;
@@ -210,6 +210,18 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
       packet.yaw);
 
   Serial.printf(
+      "Setpoint  roll=%.2f  pitch=%.2f  yaw=%.2f\n",
+      packet.des_roll,
+      packet.des_pitch,
+      packet.des_yaw);
+
+  Serial.printf(
+      "Control   thr=%.2f  des_thr=%.2f  airspeed=%.2f\n",
+      packet.throttle,
+      packet.des_throttle,
+      packet.airspeed);
+
+  Serial.printf(
       "Altitude  alt=%.2f  baro=%.2f  target=%.2f\n",
       packet.altitude,
       packet.baro_altitude,
@@ -231,7 +243,17 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
       static_cast<long>(packet.waypoint_total),
       static_cast<long>(packet.waypoint_mission_complete));
 
-  Serial.println();
+  Serial.printf(
+      "WPTarget  lat=%.6f  lon=%.6f  alt=%.2f  leg=%.2f  miss=%.2f\n",
+      packet.waypoint_target_lat,
+      packet.waypoint_target_lon,
+      packet.waypoint_target_alt,
+      packet.waypoint_leg_progress,
+      packet.waypoint_mission_progress);
+
+  Serial.printf(
+      "Failsafe  fs=%.0f\n",
+      packet.failsafe_status);
 
   Serial.printf(
       "ActivePID roll_p=%.3f roll_i=%.3f roll_d=%.3f pitch_p=%.3f pitch_i=%.3f pitch_d=%.3f yaw_p=%.3f yaw_i=%.3f yaw_d=%.3f\n",
@@ -465,7 +487,8 @@ bool InitLoRa() {
   if (!LoRa.begin(LORA_FREQ)) {
     return false;
   }
-
+  
+  LoRa.setSignalBandwidth(250E3);
   LoRa.setSyncWord(SYNC_WORD);
   LoRa.setSpreadingFactor(SPREADING_FACTOR);
   LoRa.receive();
@@ -532,6 +555,13 @@ void loop() {
         }
       } else {
         PrintTelemetryPacket(packet, LoRa.packetRssi(), LoRa.packetSnr());
+        
+        // SYNCHRONIZED TX: The Flight Controller just finished sending this telemetry
+        // and has returned to RX mode. If we have a command, send it right now!
+        if (g_pending_pid_command.active) {
+          delay(15); // Brief 15ms window to let the FC's SPI bus switch back to RX
+          ServicePendingPIDCommand();
+        }
       }
     } else {
       Serial.printf("Unexpected packet size: %d bytes\n", packet_size);
@@ -539,6 +569,10 @@ void loop() {
     }
   }
 
-  ServicePendingPIDCommand();
+  // Fallback: If telemetry connection drops completely, still retry periodically
+  if (g_pending_pid_command.active && (millis() - g_pending_pid_command.last_send_ms > PID_RETRY_INTERVAL_MS)) {
+    ServicePendingPIDCommand();
+  }
+  
   delay(10);
 }

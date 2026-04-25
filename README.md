@@ -621,3 +621,45 @@ Known limitations:
 - add yaw coordination or rudder mixing for cleaner turns
 - validate and tune magnetometer calibration values per airframe
 - sd card
+
+
+
+1. Loading PID Values on Startup
+When the Flight Controller boots, the PID values go through a two-stage initialization process inside LoadPIDTuningsFromConfig() in src/main.cpp:
+
+Hardcoded Defaults (Fallback): First, the firmware applies the hardcoded defaults defined in include/config.h (e.g., roll_kp = 20.0f, roll_ki = 0.0f). These are loaded into the active PIDController objects (roll_pid, pitch_pid, yaw_pid).
+SD Card Override: Next, the code checks if the SD card is available and logging is enabled. It calls SD_Logger_LoadPIDConfig(), which attempts to open pid_config.json on the SD card.
+If the file exists, it uses a lightweight sscanf to parse the JSON array into temporary variables.
+If parsing is successful, it calls SetControllerTuning() to override the hardcoded defaults with the values from the SD card.
+If the file does not exist or the SD card fails, it simply proceeds with the hardcoded defaults.
+2. Using PID Values Safely (Thread Safety)
+Because this is a multi-core FreeRTOS system, the PID values are read and written by multiple tasks concurrently:
+
+TaskFlightControl (Core 1) actively uses the PIDs for motor mixing and updates them when a new command arrives.
+TaskTelemetryTx (Core 1) reads the PID values every 500ms to send them to the ground station.
+TaskSDLog (Core 1) also reads them to log to the CSV file.
+To prevent data tearing (e.g., reading a kp value just as a new ki value is being written), the global PIDTuningValues structs (like g_roll_pid_tuning) and the PIDController configurations are guarded by a FreeRTOS spinlock called g_tuning_lock.
+
+Whenever the PID values are updated or read for a telemetry snapshot, you will see this pattern in the code:
+
+cpp
+portENTER_CRITICAL(&g_tuning_lock);
+// Read or Write the PID values
+portEXIT_CRITICAL(&g_tuning_lock);
+3. Receiving Live PID Updates (LoRa Protocol)
+The system supports live over-the-air tuning. Because LoRa is a half-duplex radio (it cannot send and receive simultaneously), the protocol uses a robust Request-Acknowledge architecture.
+
+Here is the step-by-step flow when you type a command like pid roll 1.5 0.1 0.05 in the Ground Control Station:
+
+Ground Station Transmission: The GCS receiver (arduino_lora_receiver.ino) parses your serial command, builds a LoRaPIDCommandPacket, and transmits it. It uses an axis_mask to specify which axes are being updated (e.g., LORA_PID_AXIS_ROLL). It will retry sending this packet every 750ms until it gets an acknowledgment.
+Flight Controller Reception: TaskLoRaRx (running on Core 0) listens for incoming LoRa packets every 20ms. When it receives the LoRaPIDCommandPacket, it validates the magic number, axis mask, and ensures the float values are valid numbers (IsPIDTuningFinite).
+Queueing the Command: Instead of applying the tuning immediately in the RX task (which could disrupt the flight control loop), it caches the packet in g_pending_pid_command and flags it as valid using another spinlock (g_pid_command_lock).
+Applying the Command: At the start of the next TaskFlightControl loop (which runs every 100ms), the system calls ApplyPendingPIDCommandIfNeeded(). This function:
+Takes the pending command from the queue.
+Checks the axis_mask and calls SetControllerTuning() for whichever axes were specified.
+Grabs g_tuning_lock to safely inject the new parameters into the active PIDController instances.
+Saving and Acknowledging: Once applied, the flight controller immediately saves the new configuration to the SD card by calling SD_Logger_SavePIDConfig(), overwriting pid_config.json. Finally, it constructs a LoRaPIDAckPacket and transmits it back to the Ground Station so the GCS knows to stop retrying.
+4. Telemetry Loop
+To ensure the Ground Station always knows the true state of the Flight Controller, the active PID gains are included in the telemetrydata snapshot.
+
+Every 500ms, TaskTelemetryTx grabs the g_tuning_lock, copies the active kp, ki, and kd parameters from the PIDController instances into the telemetry struct, and transmits it. This guarantees that even if a command acknowledgment is lost in the air, the GCS will eventually see the updated values in the standard telemetry stream.

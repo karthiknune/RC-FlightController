@@ -42,6 +42,7 @@ const pad3 = v => v != null ? String(Math.round(((v%360)+360)%360)).padStart(3,'
 const sign = v => v != null ? (v>=0?'+':'')+v.toFixed(1) : '—';
 const fmt1 = v => v != null ? v.toFixed(1) : '—';
 const fmt2 = v => v != null ? v.toFixed(2) : '—';
+const fmt3 = v => v != null ? v.toFixed(3) : '—';
 const fmt0 = v => v != null ? v.toFixed(0) : '—';
 const FM = {0:'MANUAL',1:'STAB',2:'ALT HOLD',3:'AUTO',4:'RTL',5:'LOITER',6:'FBWA',7:'FBWB',8:'CIRCLE'};
 
@@ -50,6 +51,7 @@ function useGCSData() {
   const [wsUrl, setWsUrl]   = useState('ws://localhost:8765');
   const [connected, setConn] = useState(false);
   const [flightTime, setFT]  = useState(0);
+  const [cmdLog, setCmdLog]  = useState('');
   const [, forceRender]      = useState(0);
   const wsRef       = useRef(null);
   const liveRef     = useRef(null);
@@ -90,6 +92,14 @@ function useGCSData() {
     ws.onmessage = e => {
       try {
         const D = JSON.parse(e.data);
+        if (D.type === 'cmd_log') {
+          setCmdLog(D.msg);
+          return;
+        }
+        if (D.type === 'command_status') {
+          if (D.error) setCmdLog('Error: ' + D.error);
+          return;
+        }
         liveRef.current = D;
         pktCountRef.current++;
 
@@ -118,6 +128,12 @@ function useGCSData() {
   useEffect(() => {
     connectWS(wsUrl);
     return () => { clearTimeout(retryRef.current); try { wsRef.current?.close(); } catch {} };
+  }, []);
+
+  const sendCommand = useCallback((cmdStr) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && cmdStr.trim()) {
+      wsRef.current.send(JSON.stringify({ type: 'command', command: cmdStr }));
+    }
   }, []);
 
   const D = liveRef.current;
@@ -177,6 +193,12 @@ function useGCSData() {
   const batCrit = batPct != null && batPct < 15;
   const linkWarn = rssi != null && rssi < -85;
 
+  const pid = {
+    roll:  [D?.roll_pid_kp, D?.roll_pid_ki, D?.roll_pid_kd],
+    pitch: [D?.pitch_pid_kp, D?.pitch_pid_ki, D?.pitch_pid_kd],
+    yaw:   [D?.yaw_pid_kp, D?.yaw_pid_ki, D?.yaw_pid_kd]
+  };
+
   return {
     roll, pitch, yaw, yawDes, heading, alt, spd, thr, yawRate,
     vbat, batPct, batWarn, batCrit,
@@ -185,6 +207,7 @@ function useGCSData() {
     mode, failsafe, flightTime, hist: hist.current,
     connected, wsUrl, setWsUrl, connectWS,
     pktCount: pktCountRef.current, armed,
+    pid, sendCommand, cmdLog
   };
 }
 
@@ -466,6 +489,59 @@ function BigM({ label, value, unit, color=T.textBright, warn, crit }) {
     </div>
   );
 }
+function CommandTerminal({ sendCommand, cmdLog }) {
+  const [cmd, setCmd] = useState('');
+  const [history, setHistory] = useState([]);
+  const [hIdx, setHIdx] = useState(-1);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && cmd.trim()) {
+      sendCommand(cmd);
+      setHistory(prev => [...prev, cmd]);
+      setHIdx(-1);
+      setCmd('');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length > 0) {
+        const nextIdx = hIdx === -1 ? history.length - 1 : Math.max(0, hIdx - 1);
+        setHIdx(nextIdx);
+        setCmd(history[nextIdx]);
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (hIdx !== -1) {
+        const nextIdx = hIdx + 1;
+        if (nextIdx >= history.length) {
+          setHIdx(-1);
+          setCmd('');
+        } else {
+          setHIdx(nextIdx);
+          setCmd(history[nextIdx]);
+        }
+      }
+    }
+  };
+
+  const logColor = !cmdLog ? T.textDim : cmdLog.includes('[ACK]') ? T.green : (cmdLog.includes('failed') || cmdLog.includes('Error')) ? T.red : T.amber;
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+      <div style={{ display:'flex', gap:6 }}>
+        <input value={cmd} onChange={e=>{setCmd(e.target.value); setHIdx(-1);}}
+               onKeyDown={handleKeyDown}
+               placeholder="e.g. pid roll 20 0 0.1"
+               style={{ flex:1, background:T.bg, border:`1px solid ${T.borderHi}`, color:T.textBright, padding:'5px 8px', borderRadius:4, font:'11px Space Mono', outline:'none' }} />
+        <button onClick={()=>{if(cmd.trim()){sendCommand(cmd);setHistory(p=>[...p,cmd]);setHIdx(-1);setCmd('');}}}
+                style={{ background:T.cyan+'22', color:T.cyan, border:`1px solid ${T.cyan}55`, padding:'0 12px', borderRadius:4, cursor:'pointer', font:'bold 10px DM Sans' }}>SEND</button>
+      </div>
+      {cmdLog && (
+        <div style={{ font:'400 10px Space Mono', color:logColor, background:T.bg, padding:'4px 6px', borderRadius:3, border:`1px solid ${T.border}` }}>
+          {cmdLog}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─── LEAFLET MAP ────────────────────────────────────────────────── */
 function MissionMap({ lat, lon, heading, wpLat, wpLon, wpIdx }) {
@@ -551,6 +627,8 @@ function App() {
 
   const yawMin = tm.hist.yaw.length ? Math.min(...tm.hist.yaw) - 5 : null;
   const yawMax = tm.hist.yaw.length ? Math.max(...tm.hist.yaw) + 5 : null;
+
+  const pidFmt = arr => arr[0] == null ? '—' : arr.map(fmt2).join(' | ');
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', width:'100vw', background:T.bg, color:T.text, fontFamily:'DM Sans,sans-serif', overflow:'hidden' }}>
@@ -749,6 +827,13 @@ function App() {
             <div style={{ marginTop:8 }}>
               <Row label="WPs Done" value={tm.wpIdx!=null ? `${Math.max(0,tm.wpIdx-1)} / ${tm.wpTotal??'—'}` : null} mono={false} />
             </div>
+          </Card>
+          <Card>
+            <SH label="Active PID Tuning" accent={T.violet} />
+            <Row label="Roll"  value={pidFmt(tm.pid.roll)}  />
+            <Row label="Pitch" value={pidFmt(tm.pid.pitch)} />
+            <Row label="Yaw"   value={pidFmt(tm.pid.yaw)}   />
+            <CommandTerminal sendCommand={tm.sendCommand} cmdLog={tm.cmdLog} />
           </Card>
           <Card>
             <SH label="System" />

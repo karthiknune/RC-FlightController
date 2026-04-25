@@ -78,6 +78,7 @@ bool lora_init() {
     return false;
   }
 
+  LoRa.setSignalBandwidth(250E3);
   LoRa.setSpreadingFactor(7);
   LoRa.setSyncWord(SYNC_WORD);
   enter_receive_mode();

@@ -747,11 +747,17 @@ void loop() {
         if (currentIMU.healthy) {
             Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
         }
+        else {
+            Serial.println("IMU reading unhealthy");
+        }
     }
 
     if (AIRSPEED_DEBUG_OUTPUT_ENABLED) {
         if (airspeed_data.healthy) {
             Serial.printf("Airspeed: %6.2f m/s | Pressure: %6.2f Pa\n", airspeed_data.airspeed_mps, airspeed_data.pressure_pa);
+        }
+        else {
+            Serial.println("Airspeed reading unhealthy");
         }
     }
 
@@ -759,6 +765,9 @@ void loop() {
         if (baro_data.healthy) {
             Serial.printf("Baro Altitude: %6.2f m | Pressure: %7.2f hPa\n", baro_data.altitude, baro_data.pressure);
         }
+            else {
+                Serial.println("Barometer reading unhealthy");
+            }
     }
 
     if (GPS_DEBUG_OUTPUT_ENABLED) {
