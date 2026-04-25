@@ -139,7 +139,7 @@ The LED cycles through every currently active fault instead of showing only one.
 | GPS not healthy or no lock acquired | Solid red |
 | SD card not ready or no log file open | Blinking white |
 | LoRa not initialized | Solid yellow/orange |
-| Airspeed not healthy | Blinking gray |
+| Airspeed not healthy | Blinking cyan |
 | IMU not healthy | Solid purple |
 | Barometer not healthy | Solid blue |
 | No active faults | Solid green |
