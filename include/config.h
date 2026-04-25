@@ -5,6 +5,9 @@
 #include "datatypes.h"
 #include "flight/flightmodes.h"
 
+// Set to false to bypass the stick-gesture arm/disarm requirement (bench testing)
+constexpr bool ARMING_ENABLED = false;
+
 ///pin definintions
 
 

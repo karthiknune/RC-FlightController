@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 
 struct IMUData_raw {
     float accel_x, accel_y, accel_z;
@@ -100,6 +101,22 @@ struct telemetrydata{
     int waypoint_index;
     int waypoint_total;
     int waypoint_mission_complete;
+    // sensor health + arming
+    uint8_t imu_healthy;
+    uint8_t baro_healthy;
+    uint8_t gps_healthy;
+    uint8_t rx_healthy;
+    uint8_t armed;
+    // PID outputs (microseconds of servo offset from neutral)
+    float roll_pid_out;
+    float pitch_pid_out;
+    float yaw_pid_out;
+    // raw RX PWM inputs
+    float rx_throttle_pwm;
+    float rx_aileron_pwm;
+    float rx_elevator_pwm;
+    float rx_rudder_pwm;
+    float rx_mode_pwm;
 };
 
 
