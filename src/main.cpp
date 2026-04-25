@@ -12,6 +12,7 @@
 #include "hal/comms/lora.h"
 #include "hal/comms/rx_spektrum.h"
 #include "hal/actuators/pwm_out.h"
+#include "flight/arming.h"
 #include "flight/telemetry.h"
 #include "logging/sd_logger.h"
 #include "nav/waypoint.h"
@@ -136,6 +137,10 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll = imu_data.roll;
     snapshot.pitch = imu_data.pitch;
     snapshot.yaw = imu_data.yaw;
+    snapshot.des_roll     = get_des_roll();
+    snapshot.des_pitch    = get_des_pitch();
+    snapshot.des_yaw      = get_des_yaw();
+    snapshot.des_throttle = get_des_throttle();
     snapshot.altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
     snapshot.des_altitude = navigation.get_target_altitude();
     snapshot.airspeed = airspeed_data.healthy ? airspeed_data.airspeed_mps : 0.0f;
@@ -157,6 +162,22 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.waypoint_index = navigation.get_current_waypoint_index();
     snapshot.waypoint_total = navigation.get_total_waypoint_count();
     snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
+
+    snapshot.imu_healthy  = currentIMU.healthy  ? 1 : 0;
+    snapshot.baro_healthy = baro_data.healthy   ? 1 : 0;
+    snapshot.gps_healthy  = gps_data.healthy    ? 1 : 0;
+    snapshot.rx_healthy   = rc_data.healthy     ? 1 : 0;
+    snapshot.armed        = is_armed() ? 1 : 0;
+
+    snapshot.roll_pid_out  = roll_pid.getLastOutput();
+    snapshot.pitch_pid_out = pitch_pid.getLastOutput();
+    snapshot.yaw_pid_out   = yaw_pid.getLastOutput();
+
+    snapshot.rx_throttle_pwm = rc_data.throttle_pwm;
+    snapshot.rx_aileron_pwm  = rc_data.aileron_pwm;
+    snapshot.rx_elevator_pwm = rc_data.elevator_pwm;
+    snapshot.rx_rudder_pwm   = rc_data.rudder_pwm;
+    snapshot.rx_mode_pwm     = rc_data.flightmode_pwm;
 
     if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
         snapshot.waypoint_target_lat =
@@ -230,8 +251,25 @@ void TaskFlightControl(void *pvParameters) {
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(FLIGHT_CONTROL_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
+    bool prev_armed = false;
 
     for (;;) {
+        arming_update();
+        const bool armed = is_armed();
+
+        if (!armed) {
+            motormixer_compute(0.0f, 0.0f, 0.0f, 0.0f);
+            prev_armed = false;
+            vTaskDelayUntil(&xLastWakeTime, xFrequency);
+            continue;
+        }
+
+        // Force flight mode re-init on the first tick after arming.
+        if (!prev_armed) {
+            g_flight_mode_initialized = false;
+        }
+        prev_armed = true;
+
         const FlightMode desired_mode = DetermineFlightMode();
         const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
         if (!g_flight_mode_initialized || effective_mode != active_flight_mode) {
@@ -316,6 +354,7 @@ void setup() {
     pwm_init();
     motormixer_init();
     rx_init();
+    arming_init();
     IMU_Init();
     RunStartupIMUCalibrationIfEnabled();
     Barometer_Init();
