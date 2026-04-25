@@ -432,6 +432,20 @@ function Row({ label, value, unit, warn, crit, mono=true }) {
     </div>
   );
 }
+function PidRow({ label, vals }) {
+  const isNull = vals[0] == null;
+  const c = isNull ? T.textDim : T.textBright;
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:`1px solid ${T.border}30` }}>
+      <span style={{ font:'400 11px DM Sans', color:T.textDim, width:40 }}>{label}</span>
+      <div style={{ display:'flex', flex:1, justifyContent:'flex-end', gap:10, font:'bold 12px Space Mono', color:c }}>
+        <span style={{width:50, textAlign:'right'}}>{isNull?'—':fmt2(vals[0])}</span>
+        <span style={{width:50, textAlign:'right'}}>{isNull?'—':fmt2(vals[1])}</span>
+        <span style={{width:50, textAlign:'right'}}>{isNull?'—':fmt2(vals[2])}</span>
+      </div>
+    </div>
+  );
+}
 function SH({ label, accent }) {
   return <div style={{ font:'600 9px DM Sans', color:accent||T.textDim, textTransform:'uppercase', letterSpacing:'0.14em', borderBottom:`1px solid ${T.border}`, paddingBottom:7, marginBottom:9 }}>{label}</div>;
 }
@@ -628,8 +642,6 @@ function App() {
   const yawMin = tm.hist.yaw.length ? Math.min(...tm.hist.yaw) - 5 : null;
   const yawMax = tm.hist.yaw.length ? Math.max(...tm.hist.yaw) + 5 : null;
 
-  const pidFmt = arr => arr[0] == null ? '—' : arr.map(fmt2).join(' | ');
-
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', width:'100vw', background:T.bg, color:T.text, fontFamily:'DM Sans,sans-serif', overflow:'hidden' }}>
 
@@ -788,7 +800,7 @@ function App() {
         </div>
 
         {/* RIGHT */}
-        <div style={{ width:244, flexShrink:0, background:T.panel, borderLeft:`1px solid ${T.border}`, display:'flex', flexDirection:'column', padding:11, gap:10, overflowY:'auto' }}>
+        <div style={{ width:300, flexShrink:0, background:T.panel, borderLeft:`1px solid ${T.border}`, display:'flex', flexDirection:'column', padding:11, gap:10, overflowY:'auto' }}>
           <Card>
             <SH label="Attitude" />
             <Row label="Roll"     value={sign(tm.roll)}             unit="°" />
@@ -830,9 +842,14 @@ function App() {
           </Card>
           <Card>
             <SH label="Active PID Tuning" accent={T.violet} />
-            <Row label="Roll"  value={pidFmt(tm.pid.roll)}  />
-            <Row label="Pitch" value={pidFmt(tm.pid.pitch)} />
-            <Row label="Yaw"   value={pidFmt(tm.pid.yaw)}   />
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:10, paddingBottom:2, font:'600 10px DM Sans', color:T.textDim }}>
+              <span style={{width:50, textAlign:'right'}}>P</span>
+              <span style={{width:50, textAlign:'right'}}>I</span>
+              <span style={{width:50, textAlign:'right'}}>D</span>
+            </div>
+            <PidRow label="Roll"  vals={tm.pid.roll}  />
+            <PidRow label="Pitch" vals={tm.pid.pitch} />
+            <PidRow label="Yaw"   vals={tm.pid.yaw}   />
             <CommandTerminal sendCommand={tm.sendCommand} cmdLog={tm.cmdLog} />
           </Card>
           <Card>
