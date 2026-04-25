@@ -65,7 +65,7 @@ void build_active_faults(StatusFault *faults, size_t max_faults, size_t &fault_c
     push_fault(!gps_data.healthy || !gps_data.lock_acquired, 255, 0, 0, FaultMode::Solid);  // red solid for GPS not healthy or no lock
     push_fault(LORA_LOGGING_ENABLED && !lora_is_ready(), 255, 180, 0, FaultMode::Solid);    // yellow/orange solid for LoRa not ready
     push_fault(SD_LOGGING_ENABLED && !SD_Logger_IsReady(), 255, 255, 255, FaultMode::Blink);  //  white blinking for SD card not ready
-    push_fault(!airspeed_data.healthy, 255, 128, 0, FaultMode::Blink);  //  orange blink
+    push_fault(!airspeed_data.healthy, 0, 255, 255, FaultMode::Blink);  //  cyan blink
 }
 
 } // namespace

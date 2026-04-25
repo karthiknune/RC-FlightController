@@ -23,11 +23,10 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Waypoint navigation | Implemented | Haversine distance, bearing, leg and mission progress |
 | Flight scheduler | Implemented | FreeRTOS tasks plus mode dispatcher |
 | NeoPixel status LED | Implemented | Built-in Feather NeoPixel cycles through active subsystem faults |
-| LoRa telemetry TX | Implemented | Raw binary telemetry packet sent periodically |
-| LoRa telemetry RX | Reference receiver sketch available | Arduino IDE receiver sketch provided for ESP32-WROOM DevKit under `test/arduino_lora_receiver` |
+| LoRa telemetry | Implemented | Bidirectional telemetry and OTA PID tuning |
 | Manual / Stabilize / AltHold / Glide / Waypoint modes | Implemented | Runtime-selectable by RC mode PWM mapping |
-| Spektrum receiver backend | Placeholder | Mode selection logic exists, but `rx_read()` is still stubbed |
-| Airspeed sensor | Placeholder | Source file exists but not implemented |
+| PWM RC Receiver | Implemented | Hardware timer-based PWM capture via ESP32 MCPWM |
+| Airspeed sensor | Implemented | MS4525DO over shared I2C |
 | Failsafe | Placeholder | Scaffolding exists but logic is incomplete |
 
 ## Hardware Target
@@ -62,7 +61,7 @@ The source of truth for project pin assignments is [`include/config.h`](include/
 | LoRa control | GPIO | `CS = 26 = A0`, `RST =4 = A5`, `IRQ = 39 = A3` | IRQ pin is wired, RX callback mode is not yet used in firmware |
 | SD Card | SPI | `CS = 25 = A1` | SPI wiring same as LoRa |
 | Built-in status LED | NeoPixel | `PIN_NEOPIXEL` | Used for subsystem health / fault indication |
-#######TODO: Airspeed sensor
+| Airspeed (MS4525DO) | I2C | `SDA=22`, `SCL=20` | `0x28`, uses shared sensor bus |
 
 The shared I2C layer in [`src/hal/sensors/sensor_bus.cpp`](src/hal/sensors/sensor_bus.cpp):
 
@@ -140,7 +139,7 @@ The LED cycles through every currently active fault instead of showing only one.
 | GPS not healthy or no lock acquired | Solid red |
 | SD card not ready or no log file open | Blinking white |
 | LoRa not initialized | Solid yellow/orange |
-| Airspeed not healthy | Blinking orange |
+| Airspeed not healthy | Blinking gray |
 | IMU not healthy | Solid purple |
 | Barometer not healthy | Solid blue |
 | No active faults | Solid green |
@@ -326,7 +325,7 @@ The current telemetry implementation:
 
 - sends a raw in-memory `telemetrydata` struct
 - uses a single LoRa packet per snapshot
-- currently sends `168` bytes per packet on ESP32
+- currently sends `228` bytes per packet on ESP32
 - does not add framing, versioning, checksums, or serialization beyond the native C++ layout
 
 That means the ground station must decode the exact same field order and 32-bit `float` / `int` layout to interpret packets correctly.
@@ -349,7 +348,7 @@ The telemetry packet currently includes:
 - mission progress percent
 - mission complete flag
 
-Not every field in `telemetrydata` is populated yet. In the current sender, the key populated values are attitude, altitude, GPS state, flight mode, and waypoint status. Fields such as desired control commands, airspeed, and failsafe status are still effectively placeholders.
+The telemetry packet includes attitude, altitude, GPS state, flight mode, waypoint status, airspeed, RC inputs, and the active PID controller gains for live GCS monitoring.
 
 ## Receiver (ESP32-WROOM DevKit)
 
@@ -371,7 +370,7 @@ The receiver sketch expects:
 - `915 MHz`
 - sync word `0xF3`
 - spreading factor `7`
-- payload size `168 bytes`
+- payload size `228 bytes`
 - serial monitor speed `115200`
 
 What it does:
@@ -525,9 +524,7 @@ The firmware already has the following logic:
 - RC roll / pitch / throttle conversion helpers
 - flight-mode PWM threshold selection
 
-However, the actual receiver backend is still placeholder code in [`src/hal/comms/rx_spektrum.cpp`](src/hal/comms/rx_spektrum.cpp):
-
-So the control architecture is wired, but real RC input depends on finishing the Spektrum interface.
+The receiver backend in `src/hal/comms/rx_spektrum.cpp` uses the ESP32's MCPWM hardware blocks to simultaneously capture up to 6 channels of standard PWM RC signals with hardware-level microsecond precision.
 
 ## Project Layout
 
@@ -597,13 +594,9 @@ This README tries to reflect the code as it exists now, not an idealized finishe
 
 Known limitations:
 
-- Spektrum receiver backend is placeholder-only
-- airspeed driver is not implemented yet
 - failsafe logic is incomplete
-- telemetry RX command protocol is not implemented yet
 - telemetry uses raw binary struct layout instead of a stable serialized protocol
 - yaw control is not actively used in waypoint steering
-- no persistent configuration or parameter storage yet
 
 
 ## Quick Start Checklist
@@ -616,50 +609,28 @@ Known limitations:
 6. Upload and monitor at `115200`.
 7. Verify ICM-20948 startup, barometer readings, GPS lock, and LoRa telemetry before attempting closed-loop flight.
 
-## [next steps/TODO]
-- finish the Spektrum RX backend and validate live RC mode switching
-- add yaw coordination or rudder mixing for cleaner turns
-- validate and tune magnetometer calibration values per airframe
-- sd card
+## Over-the-Air (OTA) PID Tuning
 
+The system supports live, over-the-air tuning of the flight controller's PID gains from the Ground Control Station via a robust Request-Acknowledge LoRa protocol.
 
+### 1. Loading PID Values on Startup
+When the Flight Controller boots, the PID values go through a two-stage initialization process:
 
-1. Loading PID Values on Startup
-When the Flight Controller boots, the PID values go through a two-stage initialization process inside LoadPIDTuningsFromConfig() in src/main.cpp:
+1. **Hardcoded Defaults (Fallback):** First, the firmware applies the hardcoded defaults defined in `include/config.h` (e.g., `roll_kp = 20.0f`).
+2. **SD Card Override:** Next, it attempts to load `pid_config.json` from the SD card. If parsing is successful, it overrides the hardcoded defaults with the saved values.
 
-Hardcoded Defaults (Fallback): First, the firmware applies the hardcoded defaults defined in include/config.h (e.g., roll_kp = 20.0f, roll_ki = 0.0f). These are loaded into the active PIDController objects (roll_pid, pitch_pid, yaw_pid).
-SD Card Override: Next, the code checks if the SD card is available and logging is enabled. It calls SD_Logger_LoadPIDConfig(), which attempts to open pid_config.json on the SD card.
-If the file exists, it uses a lightweight sscanf to parse the JSON array into temporary variables.
-If parsing is successful, it calls SetControllerTuning() to override the hardcoded defaults with the values from the SD card.
-If the file does not exist or the SD card fails, it simply proceeds with the hardcoded defaults.
-2. Using PID Values Safely (Thread Safety)
-Because this is a multi-core FreeRTOS system, the PID values are read and written by multiple tasks concurrently:
+### 2. Thread-Safe Tuning Locks
+Because this is a multi-core FreeRTOS system, PID values are read and written by multiple tasks concurrently (Flight Control, Telemetry, and SD Logging). To prevent data tearing, the active PID configurations are guarded by a FreeRTOS spinlock (`g_tuning_lock`).
 
-TaskFlightControl (Core 1) actively uses the PIDs for motor mixing and updates them when a new command arrives.
-TaskTelemetryTx (Core 1) reads the PID values every 500ms to send them to the ground station.
-TaskSDLog (Core 1) also reads them to log to the CSV file.
-To prevent data tearing (e.g., reading a kp value just as a new ki value is being written), the global PIDTuningValues structs (like g_roll_pid_tuning) and the PIDController configurations are guarded by a FreeRTOS spinlock called g_tuning_lock.
+### 3. Receiving Live Updates
+Because LoRa is a half-duplex radio, the protocol synchronizes with the telemetry stream to avoid mid-air collisions:
 
-Whenever the PID values are updated or read for a telemetry snapshot, you will see this pattern in the code:
+1. **GCS Queueing:** The Ground Station receives a command (`pid roll 1.5 0.1 0.05`) and queues it.
+2. **Ping-Pong Transmission:** The GCS waits for the Flight Controller to transmit a telemetry packet, then instantly fires the command back while the FC is in receive mode.
+3. **FC Application:** The Flight Controller validates the packet, updates the PID controllers safely via the spinlock, and immediately saves the new configuration back to `pid_config.json` on the SD card.
+4. **Acknowledgement:** The FC transmits an ACK back to the GCS to confirm the new tuning is active.
 
-cpp
-portENTER_CRITICAL(&g_tuning_lock);
-// Read or Write the PID values
-portEXIT_CRITICAL(&g_tuning_lock);
-3. Receiving Live PID Updates (LoRa Protocol)
-The system supports live over-the-air tuning. Because LoRa is a half-duplex radio (it cannot send and receive simultaneously), the protocol uses a robust Request-Acknowledge architecture.
-
-Here is the step-by-step flow when you type a command like pid roll 1.5 0.1 0.05 in the Ground Control Station:
-
-Ground Station Transmission: The GCS receiver (arduino_lora_receiver.ino) parses your serial command, builds a LoRaPIDCommandPacket, and transmits it. It uses an axis_mask to specify which axes are being updated (e.g., LORA_PID_AXIS_ROLL). It will retry sending this packet every 750ms until it gets an acknowledgment.
-Flight Controller Reception: TaskLoRaRx (running on Core 0) listens for incoming LoRa packets every 20ms. When it receives the LoRaPIDCommandPacket, it validates the magic number, axis mask, and ensures the float values are valid numbers (IsPIDTuningFinite).
-Queueing the Command: Instead of applying the tuning immediately in the RX task (which could disrupt the flight control loop), it caches the packet in g_pending_pid_command and flags it as valid using another spinlock (g_pid_command_lock).
-Applying the Command: At the start of the next TaskFlightControl loop (which runs every 100ms), the system calls ApplyPendingPIDCommandIfNeeded(). This function:
-Takes the pending command from the queue.
-Checks the axis_mask and calls SetControllerTuning() for whichever axes were specified.
-Grabs g_tuning_lock to safely inject the new parameters into the active PIDController instances.
-Saving and Acknowledging: Once applied, the flight controller immediately saves the new configuration to the SD card by calling SD_Logger_SavePIDConfig(), overwriting pid_config.json. Finally, it constructs a LoRaPIDAckPacket and transmits it back to the Ground Station so the GCS knows to stop retrying.
-4. Telemetry Loop
-To ensure the Ground Station always knows the true state of the Flight Controller, the active PID gains are included in the telemetrydata snapshot.
-
-Every 500ms, TaskTelemetryTx grabs the g_tuning_lock, copies the active kp, ki, and kd parameters from the PIDController instances into the telemetry struct, and transmits it. This guarantees that even if a command acknowledgment is lost in the air, the GCS will eventually see the updated values in the standard telemetry stream.
+## Next Steps / TODO
+- Complete the failsafe logic implementation (RTL/Loiter on link loss)
+- Add yaw coordination / rudder mixing for cleaner turns
+- Validate and tune magnetometer calibration values per airframe
