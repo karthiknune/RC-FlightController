@@ -11,6 +11,7 @@
 extern IMUData_raw currentIMU;
 extern BarometerData baro_data;
 extern GPSData gps_data;
+extern AirspeedData airspeed_data;
 
 namespace {
 
@@ -59,11 +60,12 @@ void build_active_faults(StatusFault *faults, size_t max_faults, size_t &fault_c
         faults[fault_count++] = StatusFault{true, red, green, blue, mode};
     };
 
-    push_fault(!currentIMU.healthy, 255, 0, 255, FaultMode::Solid);
-    push_fault(!baro_data.healthy, 0, 0, 255, FaultMode::Solid);
-    push_fault(!gps_data.healthy || !gps_data.lock_acquired, 255, 0, 0, FaultMode::Solid);
-    push_fault(LORA_LOGGING_ENABLED && !lora_is_ready(), 255, 180, 0, FaultMode::Solid);
-    push_fault(SD_LOGGING_ENABLED && !SD_Logger_IsReady(), 255, 0, 0, FaultMode::Blink);
+    push_fault(!currentIMU.healthy, 255, 0, 255, FaultMode::Solid);  // purple solid for IMU not healthy
+    push_fault(!baro_data.healthy, 0, 0, 255, FaultMode::Solid);    // blue solid for barometer not healthy
+    push_fault(!gps_data.healthy || !gps_data.lock_acquired, 255, 0, 0, FaultMode::Solid);  // red solid for GPS not healthy or no lock
+    push_fault(LORA_LOGGING_ENABLED && !lora_is_ready(), 255, 180, 0, FaultMode::Solid);    // yellow/orange solid for LoRa not ready
+    push_fault(SD_LOGGING_ENABLED && !SD_Logger_IsReady(), 255, 255, 255, FaultMode::Blink);  //  white blinking for SD card not ready
+    push_fault(!airspeed_data.healthy, 0, 255, 255, FaultMode::Blink);  //  cyan blink
 }
 
 } // namespace
@@ -80,9 +82,9 @@ void StatusLED_Update() {
         return;
     }
 
-    StatusFault faults[5] = {};
+    StatusFault faults[6] = {};
     size_t fault_count = 0;
-    build_active_faults(faults, 5, fault_count);
+    build_active_faults(faults, 6, fault_count);
 
     if (fault_count == 0) {
         show_color(0, 255, 0);
