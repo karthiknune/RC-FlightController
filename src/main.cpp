@@ -17,87 +17,112 @@
 #include "nav/waypoint.h"
 #include "flight/home.h"
 #include "status/status_led.h"
+#include "math/utils.h"
 
 IMUData_raw currentIMU; // Global variable to hold our sensor state
 IMUData_filtered imu_data = {};
 BarometerData baro_data = {};
-GPSData gps_data = {};  // Global variable to hold GPS state
+GPSData gps_data = {}; // Global variable to hold GPS state
 AirspeedData airspeed_data = {};
 FlightMode active_flight_mode = DEFAULT_FLIGHT_MODE;
 
-///pid initialisations
+/// pid initialisations
 PIDController roll_pid(roll_kp, roll_ki, roll_kd, max_roll_output, max_roll_integral);
 PIDController pitch_pid(pitch_kp, pitch_ki, pitch_kd, max_pitch_output, max_pitch_integral);
 PIDController yaw_pid(yaw_kp, yaw_ki, yaw_kd, max_yaw_output, max_yaw_integral);
 PIDController altitude_pid(alt_kp, alt_ki, alt_kd, max_alt_output, max_alt_integral);
 PIDController headingerror_pid(headingerror_kp, headingerror_ki, headingerror_kd, max_headingerror_output, max_headingerror_integral);
 
-namespace {
+namespace
+{
 
-bool g_flight_mode_initialized = false;
+    bool g_flight_mode_initialized = false;
+    bool g_yaw_reference_captured = false;
+    float g_yaw_reference_deg = 0.0f;
+    uint32_t g_yaw_reference_start_ms = 0;
+    double g_yaw_reference_sum_deg = 0.0;
+    int g_yaw_reference_sample_count = 0;
+    constexpr uint32_t kYawReferenceSettleDelayMs = 2000;
+    constexpr int kYawReferenceSamples = 100;
 
-void RunStartupIMUCalibrationIfEnabled() {
-    if (IMU_RUN_STARTUP_GYRO_CALIBRATION) {
-        (void)IMU_Calibrate_Gyro();
+    void RunStartupIMUCalibrationIfEnabled()
+    {
+        if (IMU_RUN_STARTUP_GYRO_CALIBRATION)
+        {
+            (void)IMU_Calibrate_Gyro();
+        }
+
+        if (IMU_RUN_STARTUP_LEVEL_CALIBRATION)
+        {
+            float roll_offset_deg = 0.0f;
+            float pitch_offset_deg = 0.0f;
+            (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
+        }
+
+        if (IMU_RUN_MAG_CALIBRATION)
+        {
+            float offset_x = 0.0f, offset_y = 0.0f, offset_z = 0.0f;
+            float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
+            (void)IMU_Run_Mag_Calibration(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z);
+        }
     }
 
-    if (IMU_RUN_STARTUP_LEVEL_CALIBRATION) {
-        float roll_offset_deg = 0.0f;
-        float pitch_offset_deg = 0.0f;
-        (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
+    void UpdateFilteredIMUData()
+    {
+        if (currentIMU.healthy)
+        {
+            imu_data.roll = currentIMU.roll;
+            imu_data.pitch = currentIMU.pitch;
+            imu_data.yaw = currentIMU.yaw;
+        }
     }
 
-    if (IMU_RUN_MAG_CALIBRATION) {
-        float offset_x = 0.0f, offset_y = 0.0f, offset_z = 0.0f;
-        float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
-        (void)IMU_Run_Mag_Calibration(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z);
-    }
-}
+    FlightMode ResolveFlightModeFallback(FlightMode requested_mode)
+    {
+        if (requested_mode != FlightMode::Manual && !currentIMU.healthy)
+        {
+            return FlightMode::Manual;
+        }
 
-void UpdateFilteredIMUData() {
-    if (currentIMU.healthy) {
-        imu_data.roll = currentIMU.roll;
-        imu_data.pitch = currentIMU.pitch;
-        imu_data.yaw = currentIMU.yaw;
-    }
-}
-
-FlightMode ResolveFlightModeFallback(FlightMode requested_mode) {
-    if (requested_mode != FlightMode::Manual && !currentIMU.healthy) {
-        return FlightMode::Manual;
+        return requested_mode;
     }
 
-    return requested_mode;
-}
+    FlightMode DetermineFlightMode()
+    {
+        const float flight_mode_pwm = get_flight_mode_pwm();
 
-FlightMode DetermineFlightMode() {
-    const float flight_mode_pwm = get_flight_mode_pwm();
+        if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f)
+        {
+            return DEFAULT_FLIGHT_MODE;
+        }
 
-    if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f) {
-        return DEFAULT_FLIGHT_MODE;
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX)
+        {
+            return FlightMode::Manual;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX)
+        {
+            return FlightMode::Stabilize;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX)
+        {
+            return FlightMode::AltHold;
+        }
+
+        if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX)
+        {
+            return FlightMode::Glide;
+        }
+
+        return FlightMode::Waypoint;
     }
 
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX) {
-        return FlightMode::Manual;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_STABILIZE_MAX) {
-        return FlightMode::Stabilize;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
-        return FlightMode::AltHold;
-    }
-
-    if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX) {
-        return FlightMode::Glide;
-    }
-
-    return FlightMode::Waypoint;
-}
-
-void InitializeFlightMode(FlightMode mode) {
-    switch (mode) {
+    void InitializeFlightMode(FlightMode mode)
+    {
+        switch (mode)
+        {
         case FlightMode::Manual:
             mode_manual_init();
             break;
@@ -114,11 +139,13 @@ void InitializeFlightMode(FlightMode mode) {
             navigation.restart_mission();
             mode_waypoint_init();
             break;
+        }
     }
-}
 
-void RunFlightMode(FlightMode mode) {
-    switch (mode) {
+    void RunFlightMode(FlightMode mode)
+    {
+        switch (mode)
+        {
         case FlightMode::Manual:
             mode_manual_run();
             break;
@@ -134,12 +161,13 @@ void RunFlightMode(FlightMode mode) {
         case FlightMode::Waypoint:
             mode_waypoint_run();
             break;
+        }
     }
-}
 
 } // namespace
 
-telemetrydata BuildTelemetrySnapshot() {
+telemetrydata BuildTelemetrySnapshot()
+{
     telemetrydata snapshot = {};
 
     snapshot.roll = imu_data.roll;
@@ -167,7 +195,8 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.waypoint_total = navigation.get_total_waypoint_count();
     snapshot.waypoint_mission_complete = navigation.mission_completed() ? 1 : 0;
 
-    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints) {
+    if (snapshot.waypoint_index >= 0 && snapshot.waypoint_index < num_waypoints)
+    {
         snapshot.waypoint_target_lat =
             static_cast<float>(missionwaypoints[snapshot.waypoint_index].lat);
         snapshot.waypoint_target_lon =
@@ -177,54 +206,64 @@ telemetrydata BuildTelemetrySnapshot() {
     return snapshot;
 }
 
-void TaskIMURead(void *pvParameters) {
+void TaskIMURead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(IMU_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         IMU_Read(currentIMU);
         UpdateFilteredIMUData();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskBarometerRead(void *pvParameters) {
+void TaskBarometerRead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(BARO_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         Barometer_Read(baro_data);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskAirspeedRead(void *pvParameters) {
+void TaskAirspeedRead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(AIRSPEED_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         Airspeed_Read(airspeed_data);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskGPSRead(void *pvParameters) {
+void TaskGPSRead(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(GPS_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
-        if (GPS_Read(gps_data)) {
-            if (gps_data.lock_acquired) {
+    for (;;)
+    {
+        if (GPS_Read(gps_data))
+        {
+            if (gps_data.lock_acquired)
+            {
 
-                if(!home_is_set()) {
+                if (!home_is_set())
+                {
                     float home_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
                     set_home_location(gps_data.latitude, gps_data.longitude, home_msl);
                     Serial.println("Home location set.");
-
                 }
 
                 navigation.update(gps_data.latitude, gps_data.longitude, gps_data.altitude);
@@ -235,15 +274,18 @@ void TaskGPSRead(void *pvParameters) {
     }
 }
 
-void TaskFlightControl(void *pvParameters) {
+void TaskFlightControl(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(FLIGHT_CONTROL_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         const FlightMode desired_mode = DetermineFlightMode();
         const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
-        if (!g_flight_mode_initialized || effective_mode != active_flight_mode) {
+        if (!g_flight_mode_initialized || effective_mode != active_flight_mode)
+        {
             active_flight_mode = effective_mode;
             InitializeFlightMode(active_flight_mode);
             g_flight_mode_initialized = true;
@@ -254,8 +296,10 @@ void TaskFlightControl(void *pvParameters) {
     }
 }
 
-void TaskTelemetryTx(void *pvParameters) {
-    if (!LORA_LOGGING_ENABLED) {
+void TaskTelemetryTx(void *pvParameters)
+{
+    if (!LORA_LOGGING_ENABLED)
+    {
         vTaskDelete(NULL);
         return;
     }
@@ -264,15 +308,18 @@ void TaskTelemetryTx(void *pvParameters) {
     const TickType_t xFrequency = pdMS_TO_TICKS(TELEMETRY_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         const telemetrydata snapshot = BuildTelemetrySnapshot();
         (void)telemetry_send(snapshot);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void TaskSDLog(void *pvParameters) {
-    if (!SD_LOGGING_ENABLED) {
+void TaskSDLog(void *pvParameters)
+{
+    if (!SD_LOGGING_ENABLED)
+    {
         vTaskDelete(NULL);
         return;
     }
@@ -281,13 +328,15 @@ void TaskSDLog(void *pvParameters) {
     const TickType_t xFrequency = pdMS_TO_TICKS(SD_LOG_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         const telemetrydata snapshot = BuildTelemetrySnapshot();
         SD_Logger_LogData(snapshot);
 
         // Periodically flush the file to prevent data loss on power failure
         static int flush_counter = 0;
-        if (++flush_counter >= 20) { // Flush every 1 second at 20Hz
+        if (++flush_counter >= 20)
+        { // Flush every 1 second at 20Hz
             SD_Logger_Flush();
             flush_counter = 0;
         }
@@ -295,20 +344,24 @@ void TaskSDLog(void *pvParameters) {
     }
 }
 
-void TaskStatusLED(void *pvParameters) {
+void TaskStatusLED(void *pvParameters)
+{
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(STATUS_LED_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
+    for (;;)
+    {
         StatusLED_Update();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-void setup() {
+void setup()
+{
     Serial.begin(115200);
-    while (!Serial); 
+    while (!Serial)
+        ;
 
     // Shared SPI bus safety: deselect peripherals before driver init.
     pinMode(CS_PIN, OUTPUT);
@@ -317,8 +370,9 @@ void setup() {
     digitalWrite(SD_CS, HIGH);
 
     StatusLED_Init();
-    
-    if (!SensorBus_Init()) {
+
+    if (!SensorBus_Init())
+    {
         Serial.println("Sensor I2C bus init failed.");
     }
 
@@ -332,30 +386,40 @@ void setup() {
     GPS_Init();
     navigation.restart_mission();
 
-    if (LORA_LOGGING_ENABLED) {        
-        if (!lora_init()) {
+    if (LORA_LOGGING_ENABLED)
+    {
+        if (!lora_init())
+        {
             Serial.println("LoRa init failed.");
         }
-        else {
+        else
+        {
             Serial.println("LoRa init successful.");
         }
     }
-    else {
+    else
+    {
         Serial.println("LoRa Logging Disabled by config.");
     }
 
-    if (SD_LOGGING_ENABLED) {
-        if (SD_Logger_Init()) {
-            if (SD_Logger_CreateNewLog()) {
+    if (SD_LOGGING_ENABLED)
+    {
+        if (SD_Logger_Init())
+        {
+            if (SD_Logger_CreateNewLog())
+            {
                 SD_Logger_WriteHeader();
             }
-        } else {
+        }
+        else
+        {
             // If init fails, the logger functions have checks for a valid file handle,
             // so the logging task will safely do nothing.
             Serial.println("SD Card Init Failed. Logging will be disabled.");
         }
     }
-    else {
+    else
+    {
         Serial.println("SD Logging Disabled by config.");
     }
 
@@ -366,8 +430,7 @@ void setup() {
         NULL,
         IMU_TASK_PRIORITY,
         NULL,
-        IMU_TASK_CORE
-    );
+        IMU_TASK_CORE);
 
     xTaskCreatePinnedToCore(
         TaskBarometerRead,
@@ -376,8 +439,7 @@ void setup() {
         NULL,
         BARO_TASK_PRIORITY,
         NULL,
-        BARO_TASK_CORE
-    );
+        BARO_TASK_CORE);
 
     xTaskCreatePinnedToCore(
         TaskAirspeedRead,
@@ -386,17 +448,16 @@ void setup() {
         NULL,
         AIRSPEED_TASK_PRIORITY,
         NULL,
-        AIRSPEED_TASK_CORE
-    );
+        AIRSPEED_TASK_CORE);
 
     xTaskCreatePinnedToCore(
-        TaskGPSRead,            // Function to implement the task
-        "GPS_Task",             // Name of the task
-        GPS_TASK_STACK_SIZE,    // Stack size in words
-        NULL,                   // Task input parameter
-        GPS_TASK_PRIORITY,      // Priority
-        NULL,                   // Task handle
-        GPS_TASK_CORE           // Pin to Core 1
+        TaskGPSRead,         // Function to implement the task
+        "GPS_Task",          // Name of the task
+        GPS_TASK_STACK_SIZE, // Stack size in words
+        NULL,                // Task input parameter
+        GPS_TASK_PRIORITY,   // Priority
+        NULL,                // Task handle
+        GPS_TASK_CORE        // Pin to Core 1
     );
 
     xTaskCreatePinnedToCore(
@@ -406,8 +467,7 @@ void setup() {
         NULL,
         FLIGHT_CONTROL_TASK_PRIORITY,
         NULL,
-        FLIGHT_CONTROL_TASK_CORE
-    );
+        FLIGHT_CONTROL_TASK_CORE);
 
     xTaskCreatePinnedToCore(
         TaskTelemetryTx,
@@ -416,10 +476,10 @@ void setup() {
         NULL,
         TELEMETRY_TASK_PRIORITY,
         NULL,
-        TELEMETRY_TASK_CORE
-    );
+        TELEMETRY_TASK_CORE);
 
-    if (SD_LOGGING_ENABLED) {
+    if (SD_LOGGING_ENABLED)
+    {
         xTaskCreatePinnedToCore(
             TaskSDLog,
             "SD_Log_Task",
@@ -427,8 +487,7 @@ void setup() {
             NULL,
             SD_LOG_TASK_PRIORITY,
             NULL,
-            SD_LOG_TASK_CORE
-        );
+            SD_LOG_TASK_CORE);
     }
 
     xTaskCreatePinnedToCore(
@@ -438,43 +497,94 @@ void setup() {
         NULL,
         STATUS_LED_TASK_PRIORITY,
         NULL,
-        STATUS_LED_TASK_CORE
-    );
+        STATUS_LED_TASK_CORE);
 }
 
-void loop() {
+void loop()
+{
     // Core 0 handles the default loop(). We will just use it to print data.
 
-    if (IMU_DEBUG_OUTPUT_ENABLED) {
-        if (currentIMU.healthy) {
-            Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
+    if (IMU_DEBUG_OUTPUT_ENABLED)
+    {
+        if (currentIMU.healthy)
+        {
+            if (g_yaw_reference_start_ms == 0)
+            {
+                g_yaw_reference_start_ms = millis();
+            }
+
+            if (!g_yaw_reference_captured)
+            {
+                const uint32_t now_ms = millis();
+                if ((now_ms - g_yaw_reference_start_ms) >= kYawReferenceSettleDelayMs)
+                {
+                    g_yaw_reference_sum_deg += currentIMU.yaw;
+                    g_yaw_reference_sample_count++;
+
+                    if (g_yaw_reference_sample_count >= kYawReferenceSamples)
+                    {
+                        g_yaw_reference_deg = static_cast<float>(g_yaw_reference_sum_deg / g_yaw_reference_sample_count);
+                        g_yaw_reference_captured = true;
+                        Serial.printf("Yaw reference locked at %.2f deg after startup settle.\n", g_yaw_reference_deg);
+                    }
+                }
+            }
+
+            const float yaw_relative_deg = g_yaw_reference_captured
+                                               ? math::wrap_heading_error(currentIMU.yaw - g_yaw_reference_deg)
+                                               : 0.0f;
+            const float mag_norm = sqrtf((currentIMU.mag_x * currentIMU.mag_x) +
+                                         (currentIMU.mag_y * currentIMU.mag_y) +
+                                         (currentIMU.mag_z * currentIMU.mag_z));
+
+            if (g_yaw_reference_captured)
+            {
+                Serial.printf("IMU PROD | Roll: %6.2f | Pitch: %6.2f | YawAbs: %7.2f | YawRel: %7.2f | MagNorm: %7.2f | MagXYZ: %7.2f %7.2f %7.2f\n",
+                              currentIMU.roll, currentIMU.pitch, currentIMU.yaw, yaw_relative_deg,
+                              mag_norm, currentIMU.mag_x, currentIMU.mag_y, currentIMU.mag_z);
+            }
+            else
+            {
+                Serial.printf("IMU PROD | Roll: %6.2f | Pitch: %6.2f | YawAbs: %7.2f | YawRel: settling... | MagNorm: %7.2f | MagXYZ: %7.2f %7.2f %7.2f\n",
+                              currentIMU.roll, currentIMU.pitch, currentIMU.yaw,
+                              mag_norm, currentIMU.mag_x, currentIMU.mag_y, currentIMU.mag_z);
+            }
         }
     }
 
-    if (AIRSPEED_DEBUG_OUTPUT_ENABLED) {
-        if (airspeed_data.healthy) {
+    if (AIRSPEED_DEBUG_OUTPUT_ENABLED)
+    {
+        if (airspeed_data.healthy)
+        {
             Serial.printf("Airspeed: %6.2f m/s | Pressure: %6.2f Pa\n", airspeed_data.airspeed_mps, airspeed_data.pressure_pa);
         }
     }
 
-    if (BARO_DEBUG_OUTPUT_ENABLED) {
-        if (baro_data.healthy) {
+    if (BARO_DEBUG_OUTPUT_ENABLED)
+    {
+        if (baro_data.healthy)
+        {
             Serial.printf("Baro Altitude: %6.2f m | Pressure: %7.2f hPa\n", baro_data.altitude, baro_data.pressure);
         }
     }
 
-    if (GPS_DEBUG_OUTPUT_ENABLED) {
-        if (gps_data.healthy) {
+    if (GPS_DEBUG_OUTPUT_ENABLED)
+    {
+        if (gps_data.healthy)
+        {
             Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading);
-        } else {
+        }
+        else
+        {
             Serial.println("GPS reading unhealthy");
         }
     }
 
-    if(RX_DEBUG_OUTPUT_ENABLED) {
+    if (RX_DEBUG_OUTPUT_ENABLED)
+    {
         Serial.printf("RC Data - Throttle: %u | Elevator: %u | Aileron: %u | Rudder: %u | FlightMode PWM: %u\n",
                       rc_data.throttle_pwm, rc_data.elevator_pwm, rc_data.aileron_pwm, rc_data.rudder_pwm, rc_data.flightmode_pwm);
     }
 
-    delay(50); 
+    delay(50);
 }
