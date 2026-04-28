@@ -32,12 +32,15 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 // SD Card Logger-------------
 constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50; // 20 Hz logging
+constexpr bool SD_LOGGING_ENABLED = false;
+constexpr int SD_LOG_TASK_PERIOD_MS = 50; // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
 constexpr int SD_LOG_TASK_CORE = 1;
 constexpr uint8_t SD_SCK = 5;
 constexpr uint8_t SD_MOSI = 19;
 constexpr uint8_t SD_MISO = 21;
+constexpr uint8_t SD_CS = 25; // Connected to A1
 constexpr uint8_t SD_CS = 25; // Connected to A1
 // SD Card Logger-------------
 
@@ -57,6 +60,7 @@ constexpr unsigned long GPS_BAUD_RATE = 115200UL;
 constexpr int GPS_TX_PIN = 8;
 constexpr int GPS_RX_PIN = 7;
 constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
+constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
 constexpr int GPS_TASK_PERIOD_MS = 50;
 constexpr int GPS_TASK_STACK_SIZE = 4096;
 constexpr int GPS_TASK_PRIORITY = 1;
@@ -65,9 +69,12 @@ constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
 constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
@@ -84,13 +91,13 @@ constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = -1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = -1.0f;
 // Replace these with the latest values printed by IMU_Run_Level_Calibration and IMU_Run_Mag_Calibration.
 constexpr float IMU_MAG_OFFSET_X = -10.88f;
-constexpr float IMU_MAG_OFFSET_Y =  -7.95f;
-constexpr float IMU_MAG_OFFSET_Z =  28.80f;
-constexpr float IMU_MAG_SCALE_X =  0.952f;
-constexpr float IMU_MAG_SCALE_Y =  1.115f;
-constexpr float IMU_MAG_SCALE_Z =  0.950f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG =  -4.60f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG =  -0.07f;
+constexpr float IMU_MAG_OFFSET_Y = -7.95f;
+constexpr float IMU_MAG_OFFSET_Z = 28.80f;
+constexpr float IMU_MAG_SCALE_X = 0.952f;
+constexpr float IMU_MAG_SCALE_Y = 1.115f;
+constexpr float IMU_MAG_SCALE_Z = 0.950f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -4.60f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.07f;
 // Production estimator tuning used by IMU_Read() in src/hal/sensors/imu.cpp.
 constexpr float IMU_FILTER_TIME_CONSTANT_XY = 0.75f;
 constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f;
@@ -115,10 +122,13 @@ constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 // IMU-------------
 
 // Barometer-------------
+// Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
 // Barometer-------------
+// Barometer-------------
 
+// Airspeed-------------
 // Airspeed-------------
 constexpr bool AIRSPEED_DEBUG_OUTPUT_ENABLED = false;
 constexpr int AIRSPEED_TASK_PERIOD_MS = 50;
