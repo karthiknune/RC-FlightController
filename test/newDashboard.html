@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ROS2 / PX4 Advanced Telemetry Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { font-family: monospace; background: #0f172a; color: #e2e8f0; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        h2, h3, h4 { margin-top: 0; color: #f8fafc; }
+        
+        /* Layout Grid */
+        #sidebar { width: 300px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; overflow-y: hidden; }
+        #main { flex-grow: 1; display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; overflow-y: auto; gap: 20px;}
+        
+        /* Sidebar Components */
+        .header { margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        input[type="file"] { background: #334155; color: white; padding: 8px; border-radius: 4px; border: none; cursor: pointer; width: 100%; margin-bottom: 10px; box-sizing: border-box;}
+        #status { font-size: 0.85em; color: #94a3b8; display: block; margin-bottom: 10px; word-wrap: break-word;}
+        
+        .btn { width: 100%; padding: 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-family: monospace; font-weight: bold; margin-bottom: 10px; display: none; }
+        .btn:hover { background: #2563eb; }
+
+        /* Checkbox Area */
+        #controls { overflow-y: auto; flex-grow: 1; font-size: 0.9em; }
+        .control-group { margin-bottom: 15px; }
+        .control-group h4 { margin-bottom: 5px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 3px; }
+        .cb-label { display: block; margin-bottom: 4px; cursor: pointer; }
+        .cb-label input { margin-right: 8px; }
+
+        /* Main View Components */
+        .panel { background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column;}
+        #map { height: 300px; border-radius: 4px; z-index: 1; flex-shrink: 0;}
+        .chart-container { position: relative; height: 250px; width: 100%; }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="header">
+        <h2>Ground Station</h2>
+        <input type="file" id="csvFile" accept=".csv" />
+        <span id="status">Waiting for log file...</span>
+        <button id="resetZoomBtn" class="btn">Reset Zoom</button>
+    </div>
+    <div id="controls">
+        </div>
+</div>
+
+<div id="main">
+    <div class="panel">
+        <h3>GNSS Trajectory (Filtered)</h3>
+        <div id="map"></div>
+    </div>
+    
+    <div class="panel" id="rpy-panel" style="display:none;">
+        <h3>Attitude (Roll / Pitch / Yaw)</h3>
+        <div class="chart-container"><canvas id="chart-rpy"></canvas></div>
+    </div>
+
+    <div class="panel" id="pid-panel" style="display:none;">
+        <h3>PID Tuning & Response</h3>
+        <div class="chart-container"><canvas id="chart-pid"></canvas></div>
+    </div>
+
+    <div class="panel" id="alt-panel" style="display:none;">
+        <h3>Altitude Tracking</h3>
+        <div class="chart-container"><canvas id="chart-alt"></canvas></div>
+    </div>
+
+    <div class="panel" id="custom-panel" style="display:none;">
+        <h3>Custom Telemetry Overlay</h3>
+        <div class="chart-container"><canvas id="chart-custom"></canvas></div>
+    </div>
+</div>
+
+<script>
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    let polyline = L.polyline([], {color: '#38bdf8', weight: 4}).addTo(map);
+    
+    let globalData = {};
+    let globalTime = [];
+    let charts = { rpy: null, pid: null, alt: null, custom: null };
+    
+    const categories = {
+        rpy: ['roll', 'pitch', 'yaw', 'des_roll', 'des_pitch', 'des_yaw'],
+        pid: ['roll_pid_kp', 'roll_pid_ki', 'roll_pid_kd', 'pitch_pid_kp', 'pitch_pid_ki', 'pitch_pid_kd', 'yaw_pid_kp', 'yaw_pid_ki', 'yaw_pid_kd', 'roll_pid_out', 'pitch_pid_out', 'yaw_pid_out'],
+        alt: ['altitude', 'des_altitude', 'baro_altitude']
+    };
+
+    const defaultChecked = ['roll', 'pitch', 'yaw', 'roll_pid_kp', 'roll_pid_ki', 'roll_pid_kd', 'altitude', 'des_altitude'];
+
+    document.getElementById('resetZoomBtn').addEventListener('click', () => {
+        if (charts.rpy) charts.rpy.resetZoom();
+        if (charts.pid) charts.pid.resetZoom();
+        if (charts.alt) charts.alt.resetZoom();
+        if (charts.custom) charts.custom.resetZoom();
+    });
+
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById('status').innerText = "Parsing dataset...";
+        
+        Papa.parse(file, {
+            header: true, dynamicTyping: true, skipEmptyLines: true,
+            complete: function(results) { processData(results.data); }
+        });
+    });
+
+    function processData(rawData) {
+        document.getElementById('status').innerText = "Processing arrays...";
+        globalData = {};
+        globalTime = [];
+        const gpsCoords = [];
+        
+        if (rawData.length === 0) return;
+        const columns = Object.keys(rawData[0]).filter(c => c !== 'gps_lat' && c !== 'gps_long' && c !== 'time' && c !== 'timestamp');
+
+        columns.forEach(c => globalData[c] = []);
+
+        let tIndex = 0;
+        rawData.forEach(row => {
+            if (row.roll === undefined) return; 
+
+            globalTime.push(tIndex++);
+            columns.forEach(c => globalData[c].push(row[c]));
+
+            const lat = row.gps_lat, lon = row.gps_long;
+            const sats = row.gps_sats || 0, lock = row.gps_lock_acquired || 0;
+            
+            if (lat && lon && lat !== 0 && lon !== 0) {
+                if ((lock === 1 && sats >= 6) && (lat >= 38.0 && lat <= 43.0 && lon >= -89.0 && lon <= -84.0)) {
+                    gpsCoords.push([lat, lon]);
+                }
+            }
+        });
+
+        if (gpsCoords.length > 0) {
+            polyline.setLatLngs(gpsCoords);
+            map.fitBounds(polyline.getBounds());
+        }
+
+        buildSidebar(columns);
+        updateAllCharts();
+        document.getElementById('status').innerText = `Active: ${globalTime.length} frames`;
+        document.getElementById('resetZoomBtn').style.display = 'block';
+    }
+
+    function stringToColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+        return '#' + '00000'.substring(0, 6 - c.length) + c;
+    }
+
+    function buildSidebar(columns) {
+        const container = document.getElementById('controls');
+        container.innerHTML = '';
+
+        const groups = { RPY: [], PID: [], Altitude: [], Custom: [] };
+        
+        columns.forEach(col => {
+            if (categories.rpy.includes(col)) groups.RPY.push(col);
+            else if (categories.pid.includes(col)) groups.PID.push(col);
+            else if (categories.alt.includes(col)) groups.Altitude.push(col);
+            else groups.Custom.push(col);
+        });
+
+        for (const [groupName, cols] of Object.entries(groups)) {
+            if (cols.length === 0) continue;
+            
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'control-group';
+            groupDiv.innerHTML = `<h4>${groupName}</h4>`;
+            
+            cols.forEach(col => {
+                const isChecked = defaultChecked.includes(col) ? 'checked' : '';
+                const label = document.createElement('label');
+                label.className = 'cb-label';
+                label.innerHTML = `<input type="checkbox" value="${col}" class="chart-cb" ${isChecked}> ${col}`;
+                
+                label.querySelector('input').addEventListener('change', updateAllCharts);
+                groupDiv.appendChild(label);
+            });
+            container.appendChild(groupDiv);
+        }
+    }
+
+    function updateAllCharts() {
+        const selected = Array.from(document.querySelectorAll('.chart-cb:checked')).map(cb => cb.value);
+        
+        const activeRpy = selected.filter(c => categories.rpy.includes(c));
+        const activePid = selected.filter(c => categories.pid.includes(c));
+        const activeAlt = selected.filter(c => categories.alt.includes(c));
+        const activeCustom = selected.filter(c => !categories.rpy.includes(c) && !categories.pid.includes(c) && !categories.alt.includes(c));
+
+        renderChartTier('rpy', activeRpy);
+        renderChartTier('pid', activePid);
+        renderChartTier('alt', activeAlt);
+        renderChartTier('custom', activeCustom);
+    }
+
+    function renderChartTier(tierId, activeColumns) {
+        const panel = document.getElementById(`${tierId}-panel`);
+        if (activeColumns.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = 'flex';
+
+        const datasets = activeColumns.map(col => ({
+            label: col,
+            data: globalData[col],
+            borderColor: stringToColor(col),
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            pointRadius: 0
+        }));
+
+        if (charts[tierId]) charts[tierId].destroy();
+
+        const ctx = document.getElementById(`chart-${tierId}`).getContext('2d');
+        charts[tierId] = new Chart(ctx, {
+            type: 'line',
+            data: { labels: globalTime, datasets: datasets },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false, 
+                animation: false,
+                scales: { 
+                    x: { display: false }, 
+                    y: { grid: { color: '#334155' } } 
+                },
+                plugins: { 
+                    decimation: { enabled: true, algorithm: 'lttb' },
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x', // Allow dragging left/right
+                        },
+                        zoom: {
+                            wheel: { enabled: true }, // Mouse wheel zooming
+                            pinch: { enabled: true }, // Touch screen pinching
+                            mode: 'x', // Lock zoom to time axis to prevent vertical distortion
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
