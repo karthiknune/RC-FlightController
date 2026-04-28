@@ -29,6 +29,25 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Airspeed sensor | Implemented | MS4525DO over shared I2C |
 | Failsafe | Placeholder | Scaffolding exists but logic is incomplete |
 
+## Over-the-Air (OTA) PID Tuning
+
+The system supports live, over-the-air tuning of the flight controller's PID gains from the Ground Control Station via a robust Request-Acknowledge LoRa protocol.
+
+### 1. Loading PID Values on Startup
+When the Flight Controller boots, the PID values go through a two-stage initialization process:
+1. **Hardcoded Defaults (Fallback):** First, the firmware applies the hardcoded defaults defined in `include/config.h` (e.g., `roll_kp = 20.0f`).
+2. **SD Card Override:** Next, it attempts to load `pid_config.json` from the SD card. If parsing is successful, it overrides the hardcoded defaults with the saved values.
+
+### 2. Thread-Safe Tuning Locks
+Because this is a multi-core FreeRTOS system, PID values are read and written by multiple tasks concurrently (Flight Control, Telemetry, and SD Logging). To prevent data tearing, the active PID configurations are guarded by a FreeRTOS spinlock (`g_tuning_lock`).
+
+### 3. Receiving Live Updates
+Because LoRa is a half-duplex radio, the protocol synchronizes with the telemetry stream to avoid mid-air collisions:
+1. **GCS Queueing:** The Ground Station receives a command (`pid roll 1.5 0.1 0.05`) and queues it.
+2. **Ping-Pong Transmission:** The GCS waits for the Flight Controller to transmit a telemetry packet, then instantly fires the command back while the FC is in receive mode.
+3. **FC Application:** The Flight Controller validates the packet, updates the PID controllers safely via the spinlock, and immediately saves the new configuration back to `pid_config.json` on the SD card.
+4. **Acknowledgement:** The FC transmits an ACK back to the GCS to confirm the new tuning is active.
+
 ## Hardware Target
 
 - Board: Adafruit Feather ESP32 V2
@@ -284,17 +303,15 @@ struct waypoint {
 };
 ```
 
-### Navigation Logic
+#### Navigation Logic
 
 The navigation backend in [`src/nav/waypoint.cpp`](src/nav/waypoint.cpp):
 
 - computes distance to the active waypoint with the haversine formula
 - computes initial bearing to the active waypoint
 - tracks per-leg progress
-- tracks overall mission progress
-- advances to the next waypoint when the aircraft enters the acceptance radius
 
-### Waypoint Autopilot Behavior
+#### Waypoint Autopilot Behavior
 
 In `Waypoint` mode:
 
@@ -305,7 +322,9 @@ In `Waypoint` mode:
 
 This matches normal fixed-wing turning behavior: the aircraft turns primarily by banking, not by commanding pure yaw.
 
-## LoRa Telemetry
+## Telemetry & Ground Station
+
+### LoRa Telemetry
 
 The LoRa driver in [`src/hal/comms/lora.cpp`](src/hal/comms/lora.cpp) initializes the radio and exposes thread-safe send / receive calls guarded by a mutex.
 
@@ -317,7 +336,7 @@ Current radio configuration:
 
 `115200` is only the USB serial monitor speed. It is not the LoRa over-the-air data rate.
 
-### Telemetry Transport
+#### Telemetry Transport
 
 Telemetry is sent every `500 ms` from the telemetry task.
 
@@ -330,7 +349,7 @@ The current telemetry implementation:
 
 That means the ground station must decode the exact same field order and 32-bit `float` / `int` layout to interpret packets correctly.
 
-### Telemetry Contents
+#### Telemetry Contents
 
 The telemetry packet currently includes:
 
@@ -350,28 +369,29 @@ The telemetry packet currently includes:
 
 The telemetry packet includes attitude, altitude, GPS state, flight mode, waypoint status, airspeed, RC inputs, and the active PID controller gains for live GCS monitoring.
 
-## Receiver (ESP32-WROOM DevKit)
+### LoRa Ground Receiver
 
 A ready-to-flash Arduino IDE receiver sketch is included at [`test/arduino_lora_receiver/arduino_lora_receiver.ino`](test/arduino_lora_receiver/arduino_lora_receiver.ino).
 
-Default ESP32-WROOM DevKit receiver wiring in that sketch:
+Any microcontroller (like an ESP32-WROOM, Feather, or standard Arduino) can be used as long as the pins are wired correctly. Below wiring is for ESP32-Feather v2. Default wiring in that sketch (ESP32):
 
-| Receiver signal | ESP32-WROOM DevKit pin |
+| Receiver signal | Microcontroller pin |
 | --- | --- |
-| `SCK` | `18` |
-| `MISO` | `19` |
-| `MOSI` | `23` |
-| `CS / NSS` | `5` |
-| `RST` | `14` |
-| `IRQ / DIO0` | `2` |
+| `SCK` | `5` |
+| `MISO` | `21` |
+| `MOSI` | `19` |
+| `CS / NSS` | `26` |
+| `RST` | `4` |
+| `IRQ / DIO0` | `39` |
 
 The receiver sketch expects:
 
 - `915 MHz`
 - sync word `0xF3`
 - spreading factor `7`
+- signal bandwidth `250 kHz`
 - payload size `228 bytes`
-- serial monitor speed `115200`
+- serial monitor speed `921600`
 
 What it does:
 
@@ -380,16 +400,15 @@ What it does:
 - prints decoded attitude, altitude, GPS, and waypoint values
 - prints a hex dump if the packet size does not match the expected layout
 
-If your LoRa module is wired differently on the ESP32-WROOM DevKit, change the pin constants at the top of the sketch before flashing.
+If your LoRa module is wired differently or you are using another microcontroller, change the pin constants at the top of the sketch before flashing.
 
-## GCS Bridge and Dashboard
+### GCS Bridge and Dashboard
 
 The Ground Control Station tools live under [`test/gcs`](test/gcs):
 
 - [`test/gcs/gcs_bridge.py`](test/gcs/gcs_bridge.py): reads receiver serial telemetry and rebroadcasts packets as JSON over WebSocket
-- [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html): browser dashboard that displays telemetry and can send JSON commands
 
-### What the Bridge Does
+#### What the Bridge Does
 
 `gcs_bridge.py`:
 
@@ -398,7 +417,7 @@ The Ground Control Station tools live under [`test/gcs`](test/gcs):
 - broadcasts each packet to connected WebSocket clients
 - forwards command JSON from WebSocket clients back to the receiver over serial
 
-### Install
+#### Install
 
 From the repo root:
 
@@ -455,7 +474,7 @@ python gcs_bridge.py --port /dev/ttyUSB0
 Windows example:
 
 ```powershell
-python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+python gcs_bridge.py --port COM5 --baud 921600 --ws-port 8765
 ```
 
 With defaults, the WebSocket server listens on `ws://localhost:8765`.
@@ -469,7 +488,7 @@ Open [`test/gcs/gcs_gui.html`](test/gcs/gcs_gui.html) in a browser and connect i
 
 ```text
 python gcs_bridge.py --port /dev/ttyUSB0
-python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+python gcs_bridge.py --port COM5 --baud 921600 --ws-port 8765
 python gcs_bridge.py --list-ports
 ```
 
@@ -608,27 +627,6 @@ Known limitations:
 5. Build with `pio run`.
 6. Upload and monitor at `115200`.
 7. Verify ICM-20948 startup, barometer readings, GPS lock, and LoRa telemetry before attempting closed-loop flight.
-
-## Over-the-Air (OTA) PID Tuning
-
-The system supports live, over-the-air tuning of the flight controller's PID gains from the Ground Control Station via a robust Request-Acknowledge LoRa protocol.
-
-### 1. Loading PID Values on Startup
-When the Flight Controller boots, the PID values go through a two-stage initialization process:
-
-1. **Hardcoded Defaults (Fallback):** First, the firmware applies the hardcoded defaults defined in `include/config.h` (e.g., `roll_kp = 20.0f`).
-2. **SD Card Override:** Next, it attempts to load `pid_config.json` from the SD card. If parsing is successful, it overrides the hardcoded defaults with the saved values.
-
-### 2. Thread-Safe Tuning Locks
-Because this is a multi-core FreeRTOS system, PID values are read and written by multiple tasks concurrently (Flight Control, Telemetry, and SD Logging). To prevent data tearing, the active PID configurations are guarded by a FreeRTOS spinlock (`g_tuning_lock`).
-
-### 3. Receiving Live Updates
-Because LoRa is a half-duplex radio, the protocol synchronizes with the telemetry stream to avoid mid-air collisions:
-
-1. **GCS Queueing:** The Ground Station receives a command (`pid roll 1.5 0.1 0.05`) and queues it.
-2. **Ping-Pong Transmission:** The GCS waits for the Flight Controller to transmit a telemetry packet, then instantly fires the command back while the FC is in receive mode.
-3. **FC Application:** The Flight Controller validates the packet, updates the PID controllers safely via the spinlock, and immediately saves the new configuration back to `pid_config.json` on the SD card.
-4. **Acknowledgement:** The FC transmits an ACK back to the GCS to confirm the new tuning is active.
 
 ## Next Steps / TODO
 - Complete the failsafe logic implementation (RTL/Loiter on link loss)
