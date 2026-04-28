@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 
 struct IMUData_raw
 {
@@ -107,6 +108,38 @@ struct telemetrydata
     int waypoint_index;
     int waypoint_total;
     int waypoint_mission_complete;
+    // sensor health + arming
+    uint8_t imu_healthy;
+    uint8_t baro_healthy;
+    uint8_t gps_healthy;
+    uint8_t rx_healthy;
+    uint8_t armed;
+    // PID outputs (microseconds of servo offset from neutral)
+    float roll_pid_out;
+    float pitch_pid_out;
+    float yaw_pid_out;
+    // Active PID tuning gains
+    float roll_pid_kp;
+    float roll_pid_ki;
+    float roll_pid_kd;
+    float pitch_pid_kp;
+    float pitch_pid_ki;
+    float pitch_pid_kd;
+    float yaw_pid_kp;
+    float yaw_pid_ki;
+    float yaw_pid_kd;
+    float altitude_pid_kp;
+    float altitude_pid_ki;
+    float altitude_pid_kd;
+    float headingerror_pid_kp;
+    float headingerror_pid_ki;
+    float headingerror_pid_kd;
+    // raw RX PWM inputs
+    float rx_throttle_pwm;
+    float rx_aileron_pwm;
+    float rx_elevator_pwm;
+    float rx_rudder_pwm;
+    float rx_mode_pwm;
 };
 
 struct waypoint

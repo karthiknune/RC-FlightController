@@ -5,6 +5,9 @@
 #include "datatypes.h"
 #include "flight/flightmodes.h"
 
+// Set to false to bypass the stick-gesture arm/disarm requirement (bench testing)
+constexpr bool ARMING_ENABLED = false;
+
 /// pin definintions
 
 // LoRa-------------
@@ -20,18 +23,13 @@ constexpr int IRQ_PIN = 39; // Connected to A3
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
-// Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
-constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
-constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 50;
-constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
-constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
-constexpr int TELEMETRY_TASK_PRIORITY = 1;
-constexpr int TELEMETRY_TASK_CORE = 1;
+constexpr int LORA_RX_TASK_PERIOD_MS = 20;
+constexpr int LORA_RX_TASK_STACK_SIZE = 4096;
+constexpr int LORA_RX_TASK_PRIORITY = 1;
+constexpr int LORA_RX_TASK_CORE = 0;
 // LoRa-------------
 
 // SD Card Logger-------------
-constexpr bool SD_LOGGING_ENABLED = false;
-constexpr int SD_LOG_TASK_PERIOD_MS = 50; // 20 Hz logging
 constexpr bool SD_LOGGING_ENABLED = false;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50; // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
@@ -40,7 +38,6 @@ constexpr int SD_LOG_TASK_CORE = 1;
 constexpr uint8_t SD_SCK = 5;
 constexpr uint8_t SD_MOSI = 19;
 constexpr uint8_t SD_MISO = 21;
-constexpr uint8_t SD_CS = 25; // Connected to A1
 constexpr uint8_t SD_CS = 25; // Connected to A1
 // SD Card Logger-------------
 
@@ -60,7 +57,6 @@ constexpr unsigned long GPS_BAUD_RATE = 115200UL;
 constexpr int GPS_TX_PIN = 8;
 constexpr int GPS_RX_PIN = 7;
 constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
-constexpr int GPS_TIME_ZONE_OFFSET = -4; //  UTC-4 for Eastern Daylight Time (EDT)
 constexpr int GPS_TASK_PERIOD_MS = 50;
 constexpr int GPS_TASK_STACK_SIZE = 4096;
 constexpr int GPS_TASK_PRIORITY = 1;
@@ -69,12 +65,9 @@ constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
 constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
-constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
@@ -122,13 +115,14 @@ constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 // IMU-------------
 
 // Barometer-------------
-// Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
 constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
-// Barometer-------------
+constexpr int BARO_TASK_PERIOD_MS = 50;
+constexpr int BARO_TASK_STACK_SIZE = 4096;
+constexpr int BARO_TASK_PRIORITY = 1;
+constexpr int BARO_TASK_CORE = 1;
 // Barometer-------------
 
-// Airspeed-------------
 // Airspeed-------------
 constexpr bool AIRSPEED_DEBUG_OUTPUT_ENABLED = false;
 constexpr int AIRSPEED_TASK_PERIOD_MS = 50;
@@ -148,16 +142,21 @@ constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
 constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
 // I2C-------------
 
+// SPI and Telemtry-------------
+constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 250;
+// Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
+constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
+constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
+constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
+constexpr int TELEMETRY_TASK_PRIORITY = 1;
+constexpr int TELEMETRY_TASK_CORE = 1;
+// SPI and Telemetry-------------
+
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1200.0; //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
-constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1400.0;
-constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 1600.0;
-constexpr unsigned int FLIGHT_MODE_PWM_GLIDE_MAX = 1800.0;
-constexpr int BARO_TASK_PERIOD_MS = 50;
-constexpr int BARO_TASK_STACK_SIZE = 4096;
-constexpr int BARO_TASK_PRIORITY = 1;
-constexpr int BARO_TASK_CORE = 1;
+constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500; //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
+constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1850;
+constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 2000;
 constexpr int FLIGHT_CONTROL_TASK_PERIOD_MS = 100;
 constexpr int FLIGHT_CONTROL_TASK_STACK_SIZE = 4096;
 constexpr int FLIGHT_CONTROL_TASK_PRIORITY = 1;
@@ -177,7 +176,7 @@ constexpr bool RX_DEBUG_OUTPUT_ENABLED = false;
 #define USE_ELEVATOR
 #define USE_RUDDER
 // #define USE_AILERON
-#define rx_esc_pin 21
+#define rx_esc_pin 37
 #define rx_elevator_pin 32
 #define rx_rudder_pin 33
 #define rx_mode_pin 15
