@@ -56,6 +56,12 @@ PATTERNS = {
         r'WPTarget\s+lat=(-?[\d.]+)\s+lon=(-?[\d.]+)\s+alt=(-?[\d.]+)\s+leg=(-?[\d.]+)\s+miss=(-?[\d.]+)'),
     # Failsafe  fs=0  (NEW — from patch)
     'failsafe': re.compile(r'Failsafe\s+fs=(-?[\d.]+)'),
+    # ActivePID roll_p=...
+    'active_pid': re.compile(
+        r'ActivePID\s+roll_p=(-?[\d.]+)\s+roll_i=(-?[\d.]+)\s+roll_d=(-?[\d.]+)\s+pitch_p=(-?[\d.]+)\s+pitch_i=(-?[\d.]+)\s+pitch_d=(-?[\d.]+)\s+yaw_p=(-?[\d.]+)\s+yaw_i=(-?[\d.]+)\s+yaw_d=(-?[\d.]+)'),
+    # NavPID alt_p=...
+    'nav_pid': re.compile(
+        r'NavPID\s+alt_p=(-?[\d.]+)\s+alt_i=(-?[\d.]+)\s+alt_d=(-?[\d.]+)\s+hdg_p=(-?[\d.]+)\s+hdg_i=(-?[\d.]+)\s+hdg_d=(-?[\d.]+)'),
 }
 
 
@@ -139,6 +145,23 @@ def parse_line(line: str, packet: dict) -> bool:
         packet.update({'failsafe_status': float(m.group(1))})
         return False
 
+    m = PATTERNS['active_pid'].search(line)
+    if m:
+        packet.update({
+            'roll_pid_kp': float(m.group(1)), 'roll_pid_ki': float(m.group(2)), 'roll_pid_kd': float(m.group(3)),
+            'pitch_pid_kp': float(m.group(4)), 'pitch_pid_ki': float(m.group(5)), 'pitch_pid_kd': float(m.group(6)),
+            'yaw_pid_kp': float(m.group(7)), 'yaw_pid_ki': float(m.group(8)), 'yaw_pid_kd': float(m.group(9)),
+        })
+        return False
+
+    m = PATTERNS['nav_pid'].search(line)
+    if m:
+        packet.update({
+            'altitude_pid_kp': float(m.group(1)), 'altitude_pid_ki': float(m.group(2)), 'altitude_pid_kd': float(m.group(3)),
+            'headingerror_pid_kp': float(m.group(4)), 'headingerror_pid_ki': float(m.group(5)), 'headingerror_pid_kd': float(m.group(6)),
+        })
+        return False
+
     return False
 
 
@@ -197,16 +220,9 @@ async def send_serial_command(command: str) -> str:
     if not command:
         raise ValueError('Command is empty.')
 
-    try:
-        decoded = json.loads(command)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f'Command JSON is invalid: {exc.msg}') from exc
-
-    if not isinstance(decoded, dict):
-        raise ValueError('Command JSON must be an object.')
-
-    normalized = json.dumps(decoded, separators=(',', ':'))
-    encoded = normalized.encode('utf-8')
+    # Send the command as a raw UTF-8 string, because arduino_lora_receiver
+    # expects plain text lines like "pid roll 20 0.1 0.05", not JSON.
+    encoded = command.encode('utf-8')
     if len(encoded) > MAX_COMMAND_BYTES:
         raise ValueError(
             f'Command too long ({len(encoded)} > {MAX_COMMAND_BYTES} bytes).'
@@ -223,7 +239,7 @@ async def send_serial_command(command: str) -> str:
         await loop.run_in_executor(None, conn.write, payload)
         await loop.run_in_executor(None, conn.flush)
 
-    return normalized
+    return command
 
 
 async def ws_handler(websocket):
@@ -278,21 +294,26 @@ async def serial_reader(port: str, baud: int):
             while True:
                 raw = await loop.run_in_executor(None, ser.readline)
                 line = raw.decode('utf-8', errors='replace').strip()
+                
+                # An empty line signals the end of the current packet group block.
                 if not line:
+                    if current:
+                        await broadcast(json.dumps(current))
+                        print(
+                            f"\r[Serial] #{current.get('packet_id','?'):>5}  "
+                            f"RSSI {current.get('rssi','?'):>4} dBm  "
+                            f"SNR {current.get('snr', 0):>5.1f} dB  "
+                            f"clients: {len(CLIENTS)}   ",
+                            end='', flush=True,
+                        )
+                        current = {}
                     continue
 
-                # A new header means the previous packet group is complete.
-                is_header = PATTERNS['header'].search(line) is not None
-                if is_header and current:
-                    await broadcast(json.dumps(current))
-                    print(
-                        f"\r[Serial] #{current.get('packet_id','?'):>5}  "
-                        f"RSSI {current.get('rssi','?'):>4} dBm  "
-                        f"SNR {current.get('snr', 0):>5.1f} dB  "
-                        f"clients: {len(CLIENTS)}   ",
-                        end='', flush=True,
-                    )
-                    current = {}
+                # Instantly broadcast LoRa PID command status logs to the UI
+                if line.startswith('[TX]') or line.startswith('[ACK]') or line.startswith('Queued') or line.startswith('Cancelled') or line.startswith('Still waiting'):
+                    await broadcast(json.dumps({'type': 'cmd_log', 'msg': line}))
+                    print(f"\n{line}")
+                    continue
 
                 parse_line(line, current)
 
@@ -336,8 +357,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='GCS serial-to-WebSocket telemetry bridge')
     ap.add_argument('--port',       default='/dev/ttyUSB0',
                     help='Serial port (e.g. /dev/ttyUSB0  or  COM5)')
-    ap.add_argument('--baud',       type=int, default=115200,
-                    help='Baud rate (default 115200)')
+    ap.add_argument('--baud',       type=int, default=921600,
+                    help='Baud rate (default 921600)')
     ap.add_argument('--ws-port',    type=int, default=8765,
                     help='WebSocket listen port (default 8765)')
     ap.add_argument('--list-ports', action='store_true',

@@ -24,13 +24,10 @@ constexpr int IRQ_PIN = 39;  // Connected to A3
 // LoRa parameters
 constexpr long LORA_FREQ = 915000000L;
 constexpr uint8_t SYNC_WORD = 0xF3;
-// Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
-constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
-constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 50;
-constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
-constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
-constexpr int TELEMETRY_TASK_PRIORITY = 1;
-constexpr int TELEMETRY_TASK_CORE = 1;
+constexpr int LORA_RX_TASK_PERIOD_MS = 20;
+constexpr int LORA_RX_TASK_STACK_SIZE = 4096;
+constexpr int LORA_RX_TASK_PRIORITY = 1;
+constexpr int LORA_RX_TASK_CORE = 0;
 // LoRa-------------
 
 // SD Card Logger-------------
@@ -80,7 +77,7 @@ constexpr int IMU_TASK_CORE = 1;
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X = -41.17f; //  ken will have to calibrate these for his own board using the IMU_Run_Mag_Calibration function and update these values accordingly
+constexpr float IMU_MAG_OFFSET_X = -41.17f; //  Ken will have to calibrate these for his own board using the IMU_Run_Mag_Calibration function and update these values accordingly
 constexpr float IMU_MAG_OFFSET_Y = -45.83f;
 constexpr float IMU_MAG_OFFSET_Z = -86.10f;
 constexpr float IMU_MAG_SCALE_X =  1.073f;
@@ -124,6 +121,16 @@ constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
 constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
 // I2C-------------
 
+
+//SPI and Telemtry-------------
+constexpr int SPI_BUS_LOCK_TIMEOUT_MS = 250;
+// Shared SPI bus on this airframe: choose highest common stable clock for LoRa + SD.
+constexpr uint32_t SPI_BUS_FREQUENCY_HZ = 10000000UL;
+constexpr int TELEMETRY_TASK_PERIOD_MS = 500;
+constexpr int TELEMETRY_TASK_STACK_SIZE = 4096;
+constexpr int TELEMETRY_TASK_PRIORITY = 1;
+constexpr int TELEMETRY_TASK_CORE = 1;
+//SPI and Telemetry-------------
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;

@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <math.h>
+#include <string.h>
 #include "datatypes.h"
 #include "math/pid.h"
 #include "config.h"
@@ -15,6 +17,7 @@
 #include "flight/arming.h"
 #include "flight/telemetry.h"
 #include "logging/sd_logger.h"
+#include "flight/gcs_commands.h"
 #include "nav/waypoint.h"
 #include "flight/home.h"
 #include "status/status_led.h"
@@ -173,6 +176,8 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.pitch_pid_out = pitch_pid.getLastOutput();
     snapshot.yaw_pid_out   = yaw_pid.getLastOutput();
 
+    GCS_PopulateTelemetryTuning(snapshot);
+
     snapshot.rx_throttle_pwm = rc_data.throttle_pwm;
     snapshot.rx_aileron_pwm  = rc_data.aileron_pwm;
     snapshot.rx_elevator_pwm = rc_data.elevator_pwm;
@@ -254,6 +259,7 @@ void TaskFlightControl(void *pvParameters) {
     bool prev_armed = false;
 
     for (;;) {
+        GCS_ApplyPendingCommands();
         arming_update();
         const bool armed = is_armed();
 
@@ -280,6 +286,24 @@ void TaskFlightControl(void *pvParameters) {
 
         RunFlightMode(active_flight_mode);
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void TaskLoRaRx(void *pvParameters) {
+    if (!LORA_LOGGING_ENABLED) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    uint8_t buffer[256] = {};
+
+    for (;;) {
+        const size_t bytes_read = lora_receive(buffer, sizeof(buffer));
+        if (bytes_read > 0U) {
+            GCS_ProcessIncomingPacket(buffer, bytes_read);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(LORA_RX_TASK_PERIOD_MS));
     }
 }
 
@@ -389,6 +413,8 @@ void setup() {
         Serial.println("SD Logging Disabled by config.");
     }
 
+    GCS_LoadPIDTuningsFromConfig();
+
     xTaskCreatePinnedToCore(
         TaskIMURead,
         "IMU_Task",
@@ -440,6 +466,16 @@ void setup() {
     );
 
     xTaskCreatePinnedToCore(
+        TaskLoRaRx,
+        "LoRa_RX_Task",
+        LORA_RX_TASK_STACK_SIZE,
+        NULL,
+        LORA_RX_TASK_PRIORITY,
+        NULL,
+        LORA_RX_TASK_CORE
+    );
+
+    xTaskCreatePinnedToCore(
         TaskTelemetryTx,
         "Telemetry_Task",
         TELEMETRY_TASK_STACK_SIZE,
@@ -479,11 +515,17 @@ void loop() {
         if (currentIMU.healthy) {
             Serial.printf("Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", currentIMU.roll, currentIMU.pitch, currentIMU.yaw);
         }
+        else {
+            Serial.println("IMU reading unhealthy");
+        }
     }
 
     if (AIRSPEED_DEBUG_OUTPUT_ENABLED) {
         if (airspeed_data.healthy) {
             Serial.printf("Airspeed: %6.2f m/s | Pressure: %6.2f Pa\n", airspeed_data.airspeed_mps, airspeed_data.pressure_pa);
+        }
+        else {
+            Serial.println("Airspeed reading unhealthy");
         }
     }
 
@@ -491,11 +533,14 @@ void loop() {
         if (baro_data.healthy) {
             Serial.printf("Baro Altitude: %6.2f m | Pressure: %7.2f hPa\n", baro_data.altitude, baro_data.pressure);
         }
+            else {
+                Serial.println("Barometer reading unhealthy");
+            }
     }
 
     if (GPS_DEBUG_OUTPUT_ENABLED) {
         if (gps_data.healthy) {
-            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading);
+            Serial.printf("GPS Lat: %f | Lon: %f | Alt: %f | Speed: %f | Heading: %f | Satellites: %d\n", gps_data.latitude, gps_data.longitude, gps_data.altitude, gps_data.speed, gps_data.heading, gps_data.satellites);
         } else {
             Serial.println("GPS reading unhealthy");
         }
