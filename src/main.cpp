@@ -91,11 +91,6 @@ namespace
     {
         const float flight_mode_pwm = get_flight_mode_pwm();
 
-        if (flight_mode_pwm < 900.0f || flight_mode_pwm > 2100.0f)
-        {
-            return DEFAULT_FLIGHT_MODE;
-        }
-
         if (flight_mode_pwm <= FLIGHT_MODE_PWM_MANUAL_MAX)
         {
             return FlightMode::Manual;
@@ -110,13 +105,7 @@ namespace
         {
             return FlightMode::AltHold;
         }
-
-        if (flight_mode_pwm <= FLIGHT_MODE_PWM_GLIDE_MAX)
-        {
-            return FlightMode::Glide;
-        }
-
-        return FlightMode::Waypoint;
+        return FlightMode::Glide;
     }
 
     void InitializeFlightMode(FlightMode mode)
