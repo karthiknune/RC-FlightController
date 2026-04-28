@@ -64,7 +64,7 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
