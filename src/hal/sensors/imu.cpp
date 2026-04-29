@@ -109,6 +109,24 @@ namespace
         return IMU_MAG_MIN_TRUST + ((1.0f - IMU_MAG_MIN_TRUST) * tilt_scale);
     }
 
+    float ComputeTiltCompensatedMagYawDeg(const IMUData_raw &data,
+                                          float roll_deg,
+                                          float pitch_deg)
+    {
+        const float leveled_roll_rad = (roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG) * (PI / 180.0f);
+        const float leveled_pitch_rad = (pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG) * (PI / 180.0f);
+
+        const float cr = cosf(leveled_roll_rad);
+        const float sr = sinf(leveled_roll_rad);
+        const float cp = cosf(leveled_pitch_rad);
+        const float sp = sinf(leveled_pitch_rad);
+
+        const float mag_x_h = data.mag_x * cp + data.mag_y * sr * sp + data.mag_z * cr * sp;
+        const float mag_y_h = data.mag_y * cr - data.mag_z * sr;
+
+        return atan2f(mag_y_h, mag_x_h) * 180.0f / PI;
+    }
+
     float UpdateYawKalman(float measured_yaw_deg, float gyro_yaw_rate_dps, float dt, float measurement_gain)
     {
         const float rate = gyro_yaw_rate_dps - g_yaw_kalman_bias_dps;
@@ -137,6 +155,28 @@ namespace
         g_yaw_kalman_p11 -= k1 * p01_temp;
 
         return g_yaw_deg;
+    }
+
+    void ApplyStationaryYawCorrection(float measured_yaw_deg,
+                                      float gyro_yaw_rate_dps,
+                                      float dt,
+                                      float mag_correction_gain,
+                                      float roll_deg,
+                                      float pitch_deg)
+    {
+        const float tilt_abs = fmaxf(fabsf(roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG),
+                                     fabsf(pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG));
+        if (fabsf(gyro_yaw_rate_dps) > IMU_YAW_SETTLE_MAX_GYRO_DPS ||
+            tilt_abs > IMU_YAW_SETTLE_MAX_TILT_DEG)
+        {
+            return;
+        }
+
+        const float settle_alpha = math::clamp_value((dt * IMU_YAW_SETTLE_CORRECTION_GAIN) * mag_correction_gain,
+                                                     0.0f,
+                                                     IMU_YAW_SETTLE_MAX_ALPHA);
+        const float innovation = math::wrap_heading_error(measured_yaw_deg - g_yaw_deg);
+        g_yaw_deg = math::wrap_heading_error(g_yaw_deg + (settle_alpha * innovation));
     }
 
     void AlignMagnetometerToIMUFrame(const sensors_event_t &m,
@@ -212,20 +252,9 @@ namespace
         const float theta_dot = data.gyro_y * cos_phi - data.gyro_z * sin_phi;
         const float psi_dot = (data.gyro_y * sin_phi + data.gyro_z * cos_phi) / safe_cos_theta;
 
-        // Tilt-Compensated Magnetometer Yaw
-        const float leveled_roll_rad = (g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG) * (PI / 180.0f);
-        const float leveled_pitch_rad = (g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG) * (PI / 180.0f);
-
-        const float cr = cosf(leveled_roll_rad);
-        const float sr = sinf(leveled_roll_rad);
-        const float cp = cosf(leveled_pitch_rad);
-        const float sp = sinf(leveled_pitch_rad);
-
-        const float mag_x_h = data.mag_x * cp + data.mag_y * sr * sp + data.mag_z * cr * sp;
-        const float mag_y_h = data.mag_y * cr - data.mag_z * sr;
-
-        // Positive yaw should follow aircraft right-turn convention with the current FRD mapping.
-        const float mag_heading = atan2f(mag_y_h, mag_x_h) * 180.0f / PI;
+        // Use the most recent attitude estimate for tilt compensation so roll/pitch
+        // changes do not leak into yaw while the airframe is being moved.
+        float mag_heading = ComputeTiltCompensatedMagYawDeg(data, g_roll_deg, g_pitch_deg);
 
         const float epsilon = 0.001f;
         const bool mag_is_fresh = (fabsf(data.mag_x - g_last_mag_x) > epsilon ||
@@ -236,6 +265,7 @@ namespace
         {
             g_roll_deg = accel_roll;
             g_pitch_deg = accel_pitch;
+            mag_heading = ComputeTiltCompensatedMagYawDeg(data, g_roll_deg, g_pitch_deg);
             g_yaw_deg = mag_heading;
             g_orientation_seeded = true;
 
@@ -274,6 +304,7 @@ namespace
         g_roll_deg = ((1.0f - accel_blend) * gyro_roll) + (accel_blend * accel_roll);
         g_pitch_deg = ((1.0f - accel_blend) * gyro_pitch) + (accel_blend * accel_pitch);
         g_yaw_deg = math::wrap_heading_error(gyro_yaw);
+        mag_heading = ComputeTiltCompensatedMagYawDeg(data, g_roll_deg, g_pitch_deg);
 
         if (mag_is_fresh)
         {
@@ -288,6 +319,7 @@ namespace
         if (mag_correction_gain > 0.0f)
         {
             g_yaw_deg = UpdateYawKalman(mag_heading, psi_dot, dt, mag_correction_gain);
+            ApplyStationaryYawCorrection(mag_heading, psi_dot, dt, mag_correction_gain, g_roll_deg, g_pitch_deg);
         }
 
         data.roll = -(g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG);

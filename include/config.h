@@ -97,11 +97,20 @@ constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f;
 constexpr float IMU_ACCEL_1G_MPS2 = 9.80665f;
 constexpr float IMU_ACCEL_TRUST_ERROR_MPS2 = 1.75f;
 constexpr float IMU_ACCEL_MIN_TRUST = 0.02f;
-constexpr float IMU_MAG_MIN_TRUST = 0.05f;
+constexpr float IMU_MAG_MIN_TRUST = 0.10f;
 constexpr float IMU_MAG_MAX_TILT_DEG = 65.0f;
 constexpr float IMU_YAW_KALMAN_Q_ANGLE = 0.04f;
 constexpr float IMU_YAW_KALMAN_Q_BIAS = 0.008f;
-constexpr float IMU_YAW_KALMAN_R_MEASURE = 7.0f;
+constexpr float IMU_YAW_KALMAN_R_MEASURE = 4.0f;
+// Stationary yaw settle tuning:
+// - Increase IMU_YAW_SETTLE_CORRECTION_GAIN to make yaw settle faster after you stop moving the IMU.
+// - Decrease it if yaw snaps back too aggressively or chatters near the target heading.
+// - IMU_YAW_SETTLE_MAX_GYRO_DPS and IMU_YAW_SETTLE_MAX_TILT_DEG decide when the extra settle assist is allowed to run.
+// - IMU_YAW_SETTLE_MAX_ALPHA caps how much correction can happen in a single update.
+constexpr float IMU_YAW_SETTLE_CORRECTION_GAIN = 3.5f;
+constexpr float IMU_YAW_SETTLE_MAX_ALPHA = 0.35f;
+constexpr float IMU_YAW_SETTLE_MAX_GYRO_DPS = 12.0f;
+constexpr float IMU_YAW_SETTLE_MAX_TILT_DEG = 25.0f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
