@@ -83,14 +83,14 @@ constexpr float IMU_MAG_SENSOR_ALIGN_X_SIGN = 1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = -1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = -1.0f;
 // Replace these with the latest values printed by IMU_Run_Level_Calibration and IMU_Run_Mag_Calibration.
-constexpr float IMU_MAG_OFFSET_X = -10.88f;
-constexpr float IMU_MAG_OFFSET_Y = -7.95f;
-constexpr float IMU_MAG_OFFSET_Z = 28.80f;
-constexpr float IMU_MAG_SCALE_X = 0.952f;
-constexpr float IMU_MAG_SCALE_Y = 1.115f;
-constexpr float IMU_MAG_SCALE_Z = 0.950f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -4.60f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.07f;
+constexpr float IMU_MAG_OFFSET_X = -12.75f;
+constexpr float IMU_MAG_OFFSET_Y = 0.15f;
+constexpr float IMU_MAG_OFFSET_Z = 30.00f;
+constexpr float IMU_MAG_SCALE_X = 1.044f;
+constexpr float IMU_MAG_SCALE_Y = 0.979f;
+constexpr float IMU_MAG_SCALE_Z = 0.979f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 1.48f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.67f;
 // Production estimator tuning used by IMU_Read() in src/hal/sensors/imu.cpp.
 constexpr float IMU_FILTER_TIME_CONSTANT_XY = 0.75f;
 constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f;
@@ -112,6 +112,7 @@ constexpr float IMU_YAW_SETTLE_MAX_ALPHA = 0.35f;
 constexpr float IMU_YAW_SETTLE_MAX_GYRO_DPS = 12.0f;
 constexpr float IMU_YAW_SETTLE_MAX_TILT_DEG = 25.0f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+// Gyro bias [deg/s] -> X: -0.55 | Y: 0.17 | Z: 0.05
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
 // IMU_RUN_STARTUP_LEVEL_CALIBRATION false.
