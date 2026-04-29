@@ -218,13 +218,13 @@ const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 
 ///tuning parameters
-const float roll_kp = 10.0f;
+const float roll_kp = 15.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
 const float max_roll_output = 500.0f;
 const float max_roll_integral = 200.0f;
 
-const float pitch_kp = 20.0f;
+const float pitch_kp = 30.0f;
 const float pitch_ki = 0.0f;
 const float pitch_kd = 0.1f;
 const float max_pitch_output = 500.0f;
