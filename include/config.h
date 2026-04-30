@@ -83,31 +83,34 @@ constexpr float IMU_MAG_SENSOR_ALIGN_X_SIGN = 1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = -1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = -1.0f;
 // Replace these with the latest values printed by IMU_Run_Level_Calibration and IMU_Run_Mag_Calibration.
-constexpr float IMU_MAG_OFFSET_X = -10.88f;
-constexpr float IMU_MAG_OFFSET_Y = -7.95f;
-constexpr float IMU_MAG_OFFSET_Z = 28.80f;
-constexpr float IMU_MAG_SCALE_X = 0.952f;
-constexpr float IMU_MAG_SCALE_Y = 1.115f;
-constexpr float IMU_MAG_SCALE_Z = 0.950f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -4.60f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.07f;
+constexpr float IMU_MAG_OFFSET_X = -0.45f;
+constexpr float IMU_MAG_OFFSET_Y = -5.32f;
+constexpr float IMU_MAG_OFFSET_Z = 30.98f;
+constexpr float IMU_MAG_SCALE_X = 1.101f;
+constexpr float IMU_MAG_SCALE_Y = 1.246f;
+constexpr float IMU_MAG_SCALE_Z = 0.776f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 4.94f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.17f;
 // Production estimator tuning used by IMU_Read() in src/hal/sensors/imu.cpp.
+// Roll/pitch stay Euler on the public interface, but the fusion path now keeps
+// level offsets in the measurement stage and uses vector-based tilt compensation
+// for yaw instead of the older direct trig heading formula.
 constexpr float IMU_FILTER_TIME_CONSTANT_XY = 0.75f;
-constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f;
+constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f; // Yaw correction time constant
 constexpr float IMU_ACCEL_1G_MPS2 = 9.80665f;
 constexpr float IMU_ACCEL_TRUST_ERROR_MPS2 = 1.75f;
 constexpr float IMU_ACCEL_MIN_TRUST = 0.02f;
 constexpr float IMU_MAG_MIN_TRUST = 0.05f;
-constexpr float IMU_MAG_MAX_TILT_DEG = 65.0f;
-constexpr float IMU_YAW_KALMAN_Q_ANGLE = 0.04f;
-constexpr float IMU_YAW_KALMAN_Q_BIAS = 0.008f;
-constexpr float IMU_YAW_KALMAN_R_MEASURE = 7.0f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+constexpr float IMU_MAG_MIN_HORIZONTAL_RATIO = 0.15f;
+constexpr float IMU_MAG_HEADING_LPF_TIME_CONSTANT = 0.18f;
+constexpr float IMU_YAW_BIAS_CORRECTION_GAIN = 0.08f;
+constexpr float IMU_YAW_MAX_GYRO_BIAS_DPS = 15.0f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
 // IMU_RUN_STARTUP_LEVEL_CALIBRATION false.
-constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
-constexpr bool IMU_RUN_MAG_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = true;
+constexpr bool IMU_RUN_MAG_CALIBRATION = true;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;

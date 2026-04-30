@@ -68,6 +68,54 @@ namespace
         return asinf(value);
     }
 
+    struct Vec3
+    {
+        float x;
+        float y;
+        float z;
+    };
+
+    Vec3 MakeVec3(float x, float y, float z)
+    {
+        Vec3 value = {};
+        value.x = x;
+        value.y = y;
+        value.z = z;
+        return value;
+    }
+
+    float Dot(const Vec3 &a, const Vec3 &b)
+    {
+        return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    }
+
+    Vec3 Cross(const Vec3 &a, const Vec3 &b)
+    {
+        return MakeVec3(
+            (a.y * b.z) - (a.z * b.y),
+            (a.z * b.x) - (a.x * b.z),
+            (a.x * b.y) - (a.y * b.x));
+    }
+
+    float Norm(const Vec3 &v)
+    {
+        return sqrtf(Dot(v, v));
+    }
+
+    bool Normalize(Vec3 &v)
+    {
+        const float magnitude = Norm(v);
+        if (magnitude <= 1.0e-6f)
+        {
+            return false;
+        }
+
+        v.x /= magnitude;
+        v.y /= magnitude;
+        v.z /= magnitude;
+        return true;
+    }
+
     struct Orientation
     {
         float roll = 0.0f;
@@ -275,26 +323,60 @@ namespace
         float mag_heading_flat = 0.0f;
     };
 
+    Vec3 ComputeDownVectorFromLeveledAttitude(float roll_deg, float pitch_deg)
+    {
+        const float roll_rad = roll_deg * kDegToRad;
+        const float pitch_rad = pitch_deg * kDegToRad;
+        const float sin_roll = sinf(roll_rad);
+        const float cos_roll = cosf(roll_rad);
+        const float sin_pitch = sinf(pitch_rad);
+        const float cos_pitch = cosf(pitch_rad);
+
+        return MakeVec3(
+            sin_pitch,
+            sin_roll * cos_pitch,
+            cos_roll * cos_pitch);
+    }
+
+    float ComputeTiltCompYawDeg(const IMUData_raw &sample, float roll_deg, float pitch_deg)
+    {
+        const Vec3 mag_body = MakeVec3(sample.mag_x, sample.mag_y, sample.mag_z);
+        Vec3 down_body = ComputeDownVectorFromLeveledAttitude(roll_deg, pitch_deg);
+        if (!Normalize(down_body))
+        {
+            return 0.0f;
+        }
+
+        const float mag_along_down = Dot(mag_body, down_body);
+        Vec3 horizontal_north_body = MakeVec3(
+            mag_body.x - (down_body.x * mag_along_down),
+            mag_body.y - (down_body.y * mag_along_down),
+            mag_body.z - (down_body.z * mag_along_down));
+        if (!Normalize(horizontal_north_body))
+        {
+            return 0.0f;
+        }
+
+        Vec3 horizontal_right_body = Cross(horizontal_north_body, down_body);
+        if (!Normalize(horizontal_right_body))
+        {
+            return 0.0f;
+        }
+
+        const float forward_on_north = horizontal_north_body.x;
+        const float forward_on_right = horizontal_right_body.x;
+        return WrapDegrees(atan2f(forward_on_right, forward_on_north) * kRadToDeg);
+    }
+
     DerivedReadings ComputeDerivedReadings(const IMUData_raw &sample)
     {
         DerivedReadings readings = {};
 
-        readings.accel_roll = atan2f(-sample.accel_y, -sample.accel_z) * kRadToDeg;
+        readings.accel_roll = atan2f(sample.accel_y, -sample.accel_z) * kRadToDeg;
         readings.accel_pitch = atan2f(sample.accel_x,
                                       sqrtf((sample.accel_y * sample.accel_y) + (sample.accel_z * sample.accel_z))) *
                                kRadToDeg;
-
-        const float roll_rad = readings.accel_roll * kDegToRad;
-        const float pitch_rad = readings.accel_pitch * kDegToRad;
-        const float cr = cosf(roll_rad);
-        const float sr = sinf(roll_rad);
-        const float cp = cosf(pitch_rad);
-        const float sp = sinf(pitch_rad);
-
-        const float mag_x_h = sample.mag_x * cp + sample.mag_y * sr * sp + sample.mag_z * cr * sp;
-        const float mag_y_h = sample.mag_y * cr - sample.mag_z * sr;
-
-        readings.mag_yaw = WrapDegrees(atan2f(mag_y_h, mag_x_h) * kRadToDeg);
+        readings.mag_yaw = ComputeTiltCompYawDeg(sample, readings.accel_roll, readings.accel_pitch);
         readings.mag_heading_flat = Normalize360(atan2f(sample.mag_y, sample.mag_x) * kRadToDeg);
         return readings;
     }

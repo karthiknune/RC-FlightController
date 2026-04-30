@@ -17,29 +17,73 @@ namespace
 
     constexpr uint8_t kIMUAddress = ICM20948_I2CADDR_DEFAULT;
     constexpr float kRadToDeg = 57.2957795f;
+    constexpr float kDegToRad = PI / 180.0f;
     constexpr float kMinMagAxisSpanUt = 25.0f;
-
-    uint32_t g_last_time_us = 0;
-    uint32_t g_last_mag_time_us = 0;
-    float g_last_mag_x = 0.0f;
-    float g_last_mag_y = 0.0f;
-    float g_last_mag_z = 0.0f;
 
     uint32_t g_last_init_attempt_ms = 0;
     bool g_imu_ready = false;
     bool g_imu_missing_logged = false;
     bool g_orientation_seeded = false;
+    uint32_t g_last_time_us = 0;
     float g_roll_deg = 0.0f;
     float g_pitch_deg = 0.0f;
     float g_yaw_deg = 0.0f;
     float g_gyro_bias_x_dps = 0.0f;
     float g_gyro_bias_y_dps = 0.0f;
     float g_gyro_bias_z_dps = 0.0f;
-    float g_yaw_kalman_bias_dps = 0.0f;
-    float g_yaw_kalman_p00 = 1.0f;
-    float g_yaw_kalman_p01 = 0.0f;
-    float g_yaw_kalman_p10 = 0.0f;
-    float g_yaw_kalman_p11 = 1.0f;
+    float g_yaw_fusion_bias_dps = 0.0f;
+    bool g_mag_heading_seeded = false;
+    float g_mag_heading_cos = 1.0f;
+    float g_mag_heading_sin = 0.0f;
+
+    struct Vec3
+    {
+        float x;
+        float y;
+        float z;
+    };
+
+    float WrapDegrees(float angle_deg)
+    {
+        return math::wrap_heading_error(angle_deg);
+    }
+
+    Vec3 MakeVec3(float x, float y, float z)
+    {
+        return {x, y, z};
+    }
+
+    float Dot(const Vec3 &a, const Vec3 &b)
+    {
+        return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    }
+
+    Vec3 Cross(const Vec3 &a, const Vec3 &b)
+    {
+        return {
+            (a.y * b.z) - (a.z * b.y),
+            (a.z * b.x) - (a.x * b.z),
+            (a.x * b.y) - (a.y * b.x)};
+    }
+
+    float Norm(const Vec3 &v)
+    {
+        return sqrtf(Dot(v, v));
+    }
+
+    bool Normalize(Vec3 &v)
+    {
+        const float magnitude = Norm(v);
+        if (magnitude <= 1.0e-6f)
+        {
+            return false;
+        }
+
+        v.x /= magnitude;
+        v.y /= magnitude;
+        v.z /= magnitude;
+        return true;
+    }
 
     bool ProbeIMULocked()
     {
@@ -50,19 +94,14 @@ namespace
     void ResetOrientationState()
     {
         g_last_time_us = 0;
-        g_last_mag_time_us = 0;
-        g_last_mag_x = 0.0f;
-        g_last_mag_y = 0.0f;
-        g_last_mag_z = 0.0f;
         g_orientation_seeded = false;
         g_roll_deg = 0.0f;
         g_pitch_deg = 0.0f;
         g_yaw_deg = 0.0f;
-        g_yaw_kalman_bias_dps = 0.0f;
-        g_yaw_kalman_p00 = 1.0f;
-        g_yaw_kalman_p01 = 0.0f;
-        g_yaw_kalman_p10 = 0.0f;
-        g_yaw_kalman_p11 = 1.0f;
+        g_yaw_fusion_bias_dps = 0.0f;
+        g_mag_heading_seeded = false;
+        g_mag_heading_cos = 1.0f;
+        g_mag_heading_sin = 0.0f;
     }
 
     float ApplyBodyFrameAxis(float value, float axis_sign)
@@ -87,7 +126,7 @@ namespace
         return IMU_ACCEL_MIN_TRUST + ((1.0f - IMU_ACCEL_MIN_TRUST) * trust);
     }
 
-    float ComputeMagCorrectionGain(const IMUData_raw &data, float roll_deg, float pitch_deg)
+    float ComputeMagCorrectionGain(const IMUData_raw &data, float horizontal_ratio)
     {
         const float mag_norm = sqrtf((data.mag_x * data.mag_x) +
                                      (data.mag_y * data.mag_y) +
@@ -97,46 +136,16 @@ namespace
             return IMU_MAG_MIN_TRUST;
         }
 
-        const float roll_abs = fabsf(roll_deg);
-        const float pitch_abs = fabsf(pitch_deg);
-        const float tilt_abs = (roll_abs > pitch_abs) ? roll_abs : pitch_abs;
-        if (tilt_abs >= IMU_MAG_MAX_TILT_DEG)
+        if (horizontal_ratio <= IMU_MAG_MIN_HORIZONTAL_RATIO)
         {
             return IMU_MAG_MIN_TRUST;
         }
 
-        const float tilt_scale = 1.0f - (tilt_abs / IMU_MAG_MAX_TILT_DEG);
-        return IMU_MAG_MIN_TRUST + ((1.0f - IMU_MAG_MIN_TRUST) * tilt_scale);
-    }
-
-    float UpdateYawKalman(float measured_yaw_deg, float gyro_yaw_rate_dps, float dt, float measurement_gain)
-    {
-        const float rate = gyro_yaw_rate_dps - g_yaw_kalman_bias_dps;
-        g_yaw_deg = math::wrap_heading_error(g_yaw_deg + (dt * rate));
-
-        g_yaw_kalman_p00 += dt * (dt * g_yaw_kalman_p11 - g_yaw_kalman_p01 - g_yaw_kalman_p10 + IMU_YAW_KALMAN_Q_ANGLE);
-        g_yaw_kalman_p01 -= dt * g_yaw_kalman_p11;
-        g_yaw_kalman_p10 -= dt * g_yaw_kalman_p11;
-        g_yaw_kalman_p11 += IMU_YAW_KALMAN_Q_BIAS * dt;
-
-        const float effective_r = IMU_YAW_KALMAN_R_MEASURE / measurement_gain;
-        const float innovation = math::wrap_heading_error(measured_yaw_deg - g_yaw_deg);
-        const float s = g_yaw_kalman_p00 + effective_r;
-        const float k0 = g_yaw_kalman_p00 / s;
-        const float k1 = g_yaw_kalman_p10 / s;
-
-        g_yaw_deg = math::wrap_heading_error(g_yaw_deg + (k0 * innovation));
-        g_yaw_kalman_bias_dps += k1 * innovation;
-
-        const float p00_temp = g_yaw_kalman_p00;
-        const float p01_temp = g_yaw_kalman_p01;
-
-        g_yaw_kalman_p00 -= k0 * p00_temp;
-        g_yaw_kalman_p01 -= k0 * p01_temp;
-        g_yaw_kalman_p10 -= k1 * p00_temp;
-        g_yaw_kalman_p11 -= k1 * p01_temp;
-
-        return g_yaw_deg;
+        const float normalized_ratio =
+            (horizontal_ratio - IMU_MAG_MIN_HORIZONTAL_RATIO) /
+            (1.0f - IMU_MAG_MIN_HORIZONTAL_RATIO);
+        const float clamped_ratio = math::clamp_value(normalized_ratio, 0.0f, 1.0f);
+        return IMU_MAG_MIN_TRUST + ((1.0f - IMU_MAG_MIN_TRUST) * clamped_ratio);
     }
 
     void AlignMagnetometerToIMUFrame(const sensors_event_t &m,
@@ -176,6 +185,117 @@ namespace
         data.mag_z = ApplyBodyFrameAxis((aligned_mag_z - IMU_MAG_OFFSET_Z) * IMU_MAG_SCALE_Z, IMU_BODY_FRAME_Z_SIGN);
     }
 
+    float ComputeAccelRollDeg(const IMUData_raw &data)
+    {
+        return (atan2f(data.accel_y, -data.accel_z) * kRadToDeg) - IMU_LEVEL_ROLL_OFFSET_DEG;
+    }
+
+    float ComputeAccelPitchDeg(const IMUData_raw &data)
+    {
+        return (atan2f(data.accel_x,
+                       sqrtf((data.accel_y * data.accel_y) + (data.accel_z * data.accel_z))) *
+                kRadToDeg) -
+               IMU_LEVEL_PITCH_OFFSET_DEG;
+    }
+
+    Vec3 ComputeDownVectorFromLeveledAttitude(float roll_deg, float pitch_deg)
+    {
+        const float roll_rad = roll_deg * kDegToRad;
+        const float pitch_rad = pitch_deg * kDegToRad;
+        const float sin_roll = sinf(roll_rad);
+        const float cos_roll = cosf(roll_rad);
+        const float sin_pitch = sinf(pitch_rad);
+        const float cos_pitch = cosf(pitch_rad);
+
+        return {
+            sin_pitch,
+            sin_roll * cos_pitch,
+            cos_roll * cos_pitch};
+    }
+
+    bool ComputeTiltCompensatedYawDeg(const IMUData_raw &data,
+                                      float roll_deg,
+                                      float pitch_deg,
+                                      float &yaw_deg,
+                                      float &horizontal_ratio)
+    {
+        const Vec3 mag_body = {data.mag_x, data.mag_y, data.mag_z};
+        const float mag_norm = Norm(mag_body);
+        if (mag_norm < 1.0f)
+        {
+            horizontal_ratio = 0.0f;
+            return false;
+        }
+
+        Vec3 down_body = ComputeDownVectorFromLeveledAttitude(roll_deg, pitch_deg);
+        if (!Normalize(down_body))
+        {
+            horizontal_ratio = 0.0f;
+            return false;
+        }
+
+        Vec3 horizontal_north_body = {
+            mag_body.x - (down_body.x * Dot(mag_body, down_body)),
+            mag_body.y - (down_body.y * Dot(mag_body, down_body)),
+            mag_body.z - (down_body.z * Dot(mag_body, down_body))};
+
+        const float horizontal_norm = Norm(horizontal_north_body);
+        horizontal_ratio = horizontal_norm / mag_norm;
+        if (horizontal_norm <= 1.0e-6f || horizontal_ratio <= IMU_MAG_MIN_HORIZONTAL_RATIO)
+        {
+            return false;
+        }
+
+        if (!Normalize(horizontal_north_body))
+        {
+            return false;
+        }
+
+        Vec3 horizontal_right_body = Cross(horizontal_north_body, down_body);
+        if (!Normalize(horizontal_right_body))
+        {
+            return false;
+        }
+
+        // Heading is the body-forward axis projected onto the local north/right plane.
+        const float forward_on_north = horizontal_north_body.x;
+        const float forward_on_right = horizontal_right_body.x;
+        yaw_deg = atan2f(forward_on_right, forward_on_north) * kRadToDeg;
+        yaw_deg = WrapDegrees(yaw_deg);
+        return true;
+    }
+
+    float LowPassHeadingDeg(float measured_heading_deg, float dt, float measurement_gain)
+    {
+        const float base_alpha = IMU_MAG_HEADING_LPF_TIME_CONSTANT /
+                                 (IMU_MAG_HEADING_LPF_TIME_CONSTANT + dt);
+        const float blend = (1.0f - base_alpha) * measurement_gain;
+        const float measured_cos = cosf(measured_heading_deg * kDegToRad);
+        const float measured_sin = sinf(measured_heading_deg * kDegToRad);
+
+        if (!g_mag_heading_seeded)
+        {
+            g_mag_heading_cos = measured_cos;
+            g_mag_heading_sin = measured_sin;
+            g_mag_heading_seeded = true;
+        }
+        else
+        {
+            g_mag_heading_cos = ((1.0f - blend) * g_mag_heading_cos) + (blend * measured_cos);
+            g_mag_heading_sin = ((1.0f - blend) * g_mag_heading_sin) + (blend * measured_sin);
+
+            const float mag = sqrtf((g_mag_heading_cos * g_mag_heading_cos) +
+                                    (g_mag_heading_sin * g_mag_heading_sin));
+            if (mag > 1.0e-6f)
+            {
+                g_mag_heading_cos /= mag;
+                g_mag_heading_sin /= mag;
+            }
+        }
+
+        return atan2f(g_mag_heading_sin, g_mag_heading_cos) * kRadToDeg;
+    }
+
     void UpdateOrientation(IMUData_raw &data)
     {
         const uint32_t now_us = micros();
@@ -186,14 +306,47 @@ namespace
         }
         g_last_time_us = now_us;
 
-        // Standard FRD (Forward-Right-Down) Euler Angles
-        const float accel_roll = atan2f(-data.accel_y, -data.accel_z) * 180.0f / PI;
-        const float accel_pitch = atan2f(data.accel_x, sqrtf((data.accel_y * data.accel_y) + (data.accel_z * data.accel_z))) * 180.0f / PI;
+        const float accel_roll = ComputeAccelRollDeg(data);
+        const float accel_pitch = ComputeAccelPitchDeg(data);
+
+        float measured_mag_yaw = 0.0f;
+        float horizontal_ratio = 0.0f;
+
+        if (!g_orientation_seeded)
+        {
+            g_roll_deg = accel_roll;
+            g_pitch_deg = accel_pitch;
+            if (ComputeTiltCompensatedYawDeg(data, g_roll_deg, g_pitch_deg, measured_mag_yaw, horizontal_ratio))
+            {
+                g_yaw_deg = measured_mag_yaw;
+                g_mag_heading_cos = cosf(measured_mag_yaw * kDegToRad);
+                g_mag_heading_sin = sinf(measured_mag_yaw * kDegToRad);
+                g_mag_heading_seeded = true;
+            }
+            else
+            {
+                g_yaw_deg = 0.0f;
+            }
+
+            g_orientation_seeded = true;
+            data.roll = g_roll_deg;
+            data.pitch = g_pitch_deg;
+            data.yaw = g_yaw_deg;
+            return;
+        }
+
+        // Skip integration if loop time is invalid (prevents large jumps during blocking tasks)
+        if (dt <= 0.0f || dt > 0.5f)
+        {
+            data.roll = g_roll_deg;
+            data.pitch = g_pitch_deg;
+            data.yaw = g_yaw_deg;
+            return;
+        }
 
         // Convert current Euler angles to radians
-        const float phi = g_roll_deg * (PI / 180.0f);
-        const float theta = g_pitch_deg * (PI / 180.0f);
-
+        const float phi = g_roll_deg * kDegToRad;
+        const float theta = g_pitch_deg * kDegToRad;
         const float sin_phi = sinf(phi);
         const float cos_phi = cosf(phi);
         const float cos_theta = cosf(theta);
@@ -206,92 +359,47 @@ namespace
             safe_cos_theta = (safe_cos_theta < 0.0f) ? -0.01f : 0.01f;
         }
 
-        // Full Non-Linear Euler Kinematics for Gyro Rates (FRD)
-        // Prevents cross-coupling during steep banking and climbing maneuvers.
+        // Full non-linear Euler kinematics from body rates in the FRD aircraft frame.
         const float phi_dot = data.gyro_x + tan_theta * (data.gyro_y * sin_phi + data.gyro_z * cos_phi);
         const float theta_dot = data.gyro_y * cos_phi - data.gyro_z * sin_phi;
         const float psi_dot = (data.gyro_y * sin_phi + data.gyro_z * cos_phi) / safe_cos_theta;
 
-        // Tilt-Compensated Magnetometer Yaw
-        const float leveled_roll_rad = (g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG) * (PI / 180.0f);
-        const float leveled_pitch_rad = (g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG) * (PI / 180.0f);
-
-        const float cr = cosf(leveled_roll_rad);
-        const float sr = sinf(leveled_roll_rad);
-        const float cp = cosf(leveled_pitch_rad);
-        const float sp = sinf(leveled_pitch_rad);
-
-        const float mag_x_h = data.mag_x * cp + data.mag_y * sr * sp + data.mag_z * cr * sp;
-        const float mag_y_h = data.mag_y * cr - data.mag_z * sr;
-
-        // Positive yaw should follow aircraft right-turn convention with the current FRD mapping.
-        const float mag_heading = atan2f(mag_y_h, mag_x_h) * 180.0f / PI;
-
-        const float epsilon = 0.001f;
-        const bool mag_is_fresh = (fabsf(data.mag_x - g_last_mag_x) > epsilon ||
-                                   fabsf(data.mag_y - g_last_mag_y) > epsilon ||
-                                   fabsf(data.mag_z - g_last_mag_z) > epsilon);
-
-        if (!g_orientation_seeded)
-        {
-            g_roll_deg = accel_roll;
-            g_pitch_deg = accel_pitch;
-            g_yaw_deg = mag_heading;
-            g_orientation_seeded = true;
-
-            g_last_mag_time_us = now_us;
-            g_last_mag_x = data.mag_x;
-            g_last_mag_y = data.mag_y;
-            g_last_mag_z = data.mag_z;
-            g_last_time_us = now_us;
-
-            data.roll = -(g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG);
-            data.pitch = g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG;
-            data.yaw = g_yaw_deg;
-            return;
-        }
-
-        // Skip integration if loop time is invalid (prevents large jumps during blocking tasks)
-        if (dt <= 0.0f || dt > 0.5f)
-        {
-            g_last_time_us = now_us;
-            data.roll = -(g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG);
-            data.pitch = g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG;
-            data.yaw = g_yaw_deg;
-            return;
-        }
-
-        // Integrate non-linear gyro rates
+        // Predict roll/pitch/yaw from gyro rates first.
         const float gyro_roll = g_roll_deg + (phi_dot * dt);
         const float gyro_pitch = g_pitch_deg + (theta_dot * dt);
-        const float gyro_yaw = g_yaw_deg + (psi_dot * dt);
+        const float gyro_yaw = WrapDegrees(g_yaw_deg + ((psi_dot - g_yaw_fusion_bias_dps) * dt));
 
-        // Dynamic filter weights based on actual loop time
+        // Correct roll/pitch back toward gravity using measured specific force when it
+        // still looks close to 1 g. Offsets are already applied in the measurement.
         const float accel_correction_gain = ComputeAccelCorrectionGain(data);
         const float base_alpha_xy = IMU_FILTER_TIME_CONSTANT_XY / (IMU_FILTER_TIME_CONSTANT_XY + dt);
         const float accel_blend = (1.0f - base_alpha_xy) * accel_correction_gain;
 
-        g_roll_deg = ((1.0f - accel_blend) * gyro_roll) + (accel_blend * accel_roll);
-        g_pitch_deg = ((1.0f - accel_blend) * gyro_pitch) + (accel_blend * accel_pitch);
-        g_yaw_deg = math::wrap_heading_error(gyro_yaw);
+        g_roll_deg = gyro_roll + (accel_blend * WrapDegrees(accel_roll - gyro_roll));
+        g_pitch_deg = gyro_pitch + (accel_blend * (accel_pitch - gyro_pitch));
+        g_yaw_deg = gyro_yaw;
 
-        if (mag_is_fresh)
+        // Tilt-compensate magnetometer using the fused roll/pitch estimate. This keeps
+        // yaw stable even while the aircraft is banked because the mag vector is first
+        // projected onto the level horizontal plane instead of relying on a fragile
+        // direct trig heading expression.
+        if (ComputeTiltCompensatedYawDeg(data, g_roll_deg, g_pitch_deg, measured_mag_yaw, horizontal_ratio))
         {
-            g_last_mag_time_us = now_us;
-            g_last_mag_x = data.mag_x;
-            g_last_mag_y = data.mag_y;
-            g_last_mag_z = data.mag_z;
+            const float mag_correction_gain = ComputeMagCorrectionGain(data, horizontal_ratio);
+            const float filtered_mag_yaw = LowPassHeadingDeg(measured_mag_yaw, dt, mag_correction_gain);
+            const float base_alpha_yaw = IMU_FILTER_TIME_CONSTANT_Z / (IMU_FILTER_TIME_CONSTANT_Z + dt);
+            const float yaw_blend = (1.0f - base_alpha_yaw) * mag_correction_gain;
+            const float yaw_error = WrapDegrees(filtered_mag_yaw - g_yaw_deg);
+
+            g_yaw_deg = WrapDegrees(g_yaw_deg + (yaw_blend * yaw_error));
+            g_yaw_fusion_bias_dps -= IMU_YAW_BIAS_CORRECTION_GAIN * yaw_error * dt * mag_correction_gain;
+            g_yaw_fusion_bias_dps = math::clamp_value(g_yaw_fusion_bias_dps,
+                                                      -IMU_YAW_MAX_GYRO_BIAS_DPS,
+                                                      IMU_YAW_MAX_GYRO_BIAS_DPS);
         }
 
-        // Always apply mag correction using the last known heading
-        const float mag_correction_gain = ComputeMagCorrectionGain(data, g_roll_deg, g_pitch_deg);
-        if (mag_correction_gain > 0.0f)
-        {
-            g_yaw_deg = UpdateYawKalman(mag_heading, psi_dot, dt, mag_correction_gain);
-        }
-
-        data.roll = -(g_roll_deg - IMU_LEVEL_ROLL_OFFSET_DEG);
-        data.pitch = g_pitch_deg - IMU_LEVEL_PITCH_OFFSET_DEG;
+        data.roll = g_roll_deg;
+        data.pitch = g_pitch_deg;
         data.yaw = g_yaw_deg;
     }
 
