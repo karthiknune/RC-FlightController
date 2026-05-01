@@ -42,7 +42,13 @@ struct GPSData {
     GPSLocalTime local_time;
     GPSRawCoordinates raw_coordinates;
     bool lock_acquired;
-    bool healthy; 
+    bool healthy;
+    // Compass (QMC5883L) on the GPS module's I2C bus.
+    float mag_x;
+    float mag_y;
+    float mag_z;
+    float compass_heading;
+    bool compass_healthy;
 };
 
 struct BarometerData {

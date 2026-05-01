@@ -64,9 +64,23 @@ constexpr int GPS_TASK_PRIORITY = 1;
 constexpr int GPS_TASK_CORE = 1;
 constexpr int GPS_SENTENCE_BUFFER_SIZE = 128;
 constexpr int GPS_MAX_FIELDS = 20;
-constexpr bool GPS_DEBUG_OUTPUT_ENABLED = false;
+constexpr bool GPS_DEBUG_OUTPUT_ENABLED = true;
 constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
+
+// GPS Compass (QMC5883L on HGLRC M100)-------------
+constexpr bool GPS_COMPASS_ENABLED = true;
+constexpr uint8_t GPS_COMPASS_I2C_ADDRESS = 0x0D;
+// Magnetic declination at the flying site, degrees (east positive). Calibrate
+// these with IMU_Run_Mag_Calibration applied to the GPS compass axes.
+constexpr float GPS_COMPASS_DECLINATION_DEG = 0.0f;
+constexpr float GPS_COMPASS_OFFSET_X = 0.0f;
+constexpr float GPS_COMPASS_OFFSET_Y = 0.0f;
+constexpr float GPS_COMPASS_OFFSET_Z = 0.0f;
+constexpr float GPS_COMPASS_SCALE_X = 1.0f;
+constexpr float GPS_COMPASS_SCALE_Y = 1.0f;
+constexpr float GPS_COMPASS_SCALE_Z = 1.0f;
+// GPS Compass-------------
 
 // IMU-------------
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
@@ -114,9 +128,9 @@ constexpr uint8_t AIRSPEED_I2C_ADDRESS = 0x28; // MS4525DO default address
 // I2C-------------
 constexpr int I2C_SDA_PIN = 22;
 constexpr int I2C_SCL_PIN = 20;
-constexpr uint32_t I2C_BUS_FREQUENCY_HZ = 400000UL;
-constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 20;
-constexpr int SENSOR_I2C_LOCK_TIMEOUT_MS = 20;
+constexpr uint32_t I2C_BUS_FREQUENCY_HZ = 100000UL;
+constexpr uint16_t SENSOR_I2C_TIMEOUT_MS = 40;
+constexpr int SENSOR_I2C_LOCK_TIMEOUT_MS = 60;
 constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 1000;
 constexpr bool SENSOR_STATUS_LOGGING_ENABLED = true;
 // I2C-------------
