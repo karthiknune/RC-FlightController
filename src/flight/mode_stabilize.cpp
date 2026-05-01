@@ -20,14 +20,14 @@ void mode_stabilize_init() {
 
 void mode_stabilize_run() {
     //from imu
-    float actual_roll = imu_data.roll;
+    float actual_roll = -imu_data.roll;
     float actual_pitch = imu_data.pitch;
     //stick inputs
     float des_roll = get_des_yaw();
     float des_pitch = get_des_pitch();
     float des_throttle = get_des_throttle();
 
-    float roll = -roll_pid.compute(des_roll, actual_roll, flight_control_dt_seconds);
+    float roll = roll_pid.compute(des_roll, actual_roll, flight_control_dt_seconds);
     float pitch = pitch_pid.compute(des_pitch, actual_pitch, flight_control_dt_seconds);
     float throttle = des_throttle;
 
