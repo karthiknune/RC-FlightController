@@ -4,6 +4,7 @@
 #include "hal/sensors/baro.h"
 #include "hal/sensors/gps.h"
 #include "flight/motormixer.h"
+#include "flight/gcs_commands.h"
 #include "math/pid.h"
 #include "flight/home.h"
 #include "math/utils.h"
@@ -26,17 +27,17 @@ void mode_alt_hold_init() {
 }
 
 void mode_alt_hold_run(){
-    float actual_roll = imu_data.roll;
+    float actual_roll = -imu_data.roll;
     float actual_pitch = imu_data.pitch;
     
     float des_throttle = get_des_throttle();
-    float des_roll = get_des_roll();
+    float des_roll = get_des_yaw();
     float des_pitch = get_des_pitch();
 
        // only run altitude hold if we have a valid altitude reading and home is set.
     if ((baro_data.healthy || gps_data.lock_acquired) && home_is_set()) {
         
-        float target_agl = target_alt_agl;
+        float target_agl = GCS_GetTargetAltitudeAGL();
         float actual_alt_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
         float actual_alt_agl = calc_AGL(actual_alt_msl);
 

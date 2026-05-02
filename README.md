@@ -29,24 +29,48 @@ The current codebase is functional as a firmware skeleton with working sensor in
 | Airspeed sensor | Implemented | MS4525DO over shared I2C |
 | Failsafe | Placeholder | Scaffolding exists but logic is incomplete |
 
-## Over-the-Air (OTA) PID Tuning
+## Over-the-Air (OTA) PID and Altitude Tuning
 
-The system supports live, over-the-air tuning of the flight controller's PID gains from the Ground Control Station via a robust Request-Acknowledge LoRa protocol.
+The system supports live, over-the-air tuning of the flight controller's PID gains and target altitude from the Ground Control Station via a robust Request-Acknowledge LoRa protocol.
 
 ### 1. Loading PID Values on Startup
-When the Flight Controller boots, the PID values go through a two-stage initialization process:
+When the Flight Controller boots, `GCS_LoadPIDTuningsFromConfig()` (called from `main.cpp`) triggers a two-stage initialization process:
 1. **Hardcoded Defaults (Fallback):** First, the firmware applies the hardcoded defaults defined in `include/config.h` (e.g., `roll_kp = 20.0f`).
-2. **SD Card Override:** Next, it attempts to load `pid_config.json` from the SD card. If parsing is successful, it overrides the hardcoded defaults with the saved values.
+2. **SD Card Override:** Next, it attempts to load `pid_config.json` from the SD card via `SD_Logger_LoadPIDConfig()`. If parsing is successful, it overrides the hardcoded defaults with the saved values.
 
 ### 2. Thread-Safe Tuning Locks
 Because this is a multi-core FreeRTOS system, PID values are read and written by multiple tasks concurrently (Flight Control, Telemetry, and SD Logging). To prevent data tearing, the active PID configurations are guarded by a FreeRTOS spinlock (`g_tuning_lock`).
+This spinlock is actively utilized by functions such as `GCS_PopulateTelemetryTuning()` to safely read active gains for telemetry without tearing.
 
 ### 3. Receiving Live Updates
 Because LoRa is a half-duplex radio, the protocol synchronizes with the telemetry stream to avoid mid-air collisions:
 1. **GCS Queueing:** The Ground Station receives a command (`pid roll 1.5 0.1 0.05`) and queues it.
 2. **Ping-Pong Transmission:** The GCS waits for the Flight Controller to transmit a telemetry packet, then instantly fires the command back while the FC is in receive mode.
-3. **FC Application:** The Flight Controller validates the packet, updates the PID controllers safely via the spinlock, and immediately saves the new configuration back to `pid_config.json` on the SD card.
+3. **FC Application:** Incoming raw packets are processed by `GCS_ProcessIncomingPacket()`. During the flight control cycle, `GCS_ApplyPendingCommands()` updates the PID controllers safely via the spinlock, and immediately saves the new configuration back to `pid_config.json` on the SD card via `SD_Logger_SavePIDConfig()`.
 4. **Acknowledgement:** The FC transmits an ACK back to the GCS to confirm the new tuning is active.
+
+### 4. Supported GCS Commands
+The ground station receiver accepts the following text commands over serial (or via the WebSocket bridge) and reliably transmits them to the flight controller:
+
+**PID Tuning:**
+- `pid roll <kp> <ki> <kd>`: Update Roll PID gains.
+- `pid pitch <kp> <ki> <kd>`: Update Pitch PID gains.
+- `pid yaw <kp> <ki> <kd>`: Update Yaw PID gains.
+- `pid altitude <kp> <ki> <kd>` or `pid alt <kp> <ki> <kd>`: Update Altitude hold PID gains.
+- `pid all <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd> [<akp> <aki> <akd>]`: Update multiple axes simultaneously.
+
+*Example:* `pid roll 15.5 0.1 0.05`
+
+**Target Altitude:**
+Live adjustments to the target altitude (in meters Above Ground Level) utilized by `AltHold` and `Waypoint` modes.
+- `target altitude <agl_m>` or `alt <agl_m>`
+
+*Example:* `alt 75.5`
+
+**Utility Commands:**
+- `show pid` or `show`: Display the last acknowledged PID and altitude target state.
+- `cancel`: Abort any pending command waiting for acknowledgement.
+- `help`: Print the list of available commands.
 
 ## Hardware Target
 

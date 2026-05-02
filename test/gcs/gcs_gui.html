@@ -145,6 +145,7 @@ function useGCSData() {
   const yawDes  = D?.des_yaw != null ? ((D.des_yaw % 360) + 360) % 360 : null;
   const heading = D?.gps_heading ?? yaw;
   const alt     = D?.altitude ?? null;
+  const altTarget = D?.des_altitude ?? null;
   const spd     = D?.airspeed ?? null;
   const thr     = D?.throttle != null ? D.throttle * 100 : null;
 
@@ -196,11 +197,12 @@ function useGCSData() {
   const pid = {
     roll:  [D?.roll_pid_kp, D?.roll_pid_ki, D?.roll_pid_kd],
     pitch: [D?.pitch_pid_kp, D?.pitch_pid_ki, D?.pitch_pid_kd],
-    yaw:   [D?.yaw_pid_kp, D?.yaw_pid_ki, D?.yaw_pid_kd]
+    yaw:   [D?.yaw_pid_kp, D?.yaw_pid_ki, D?.yaw_pid_kd],
+    altitude: [D?.altitude_pid_kp, D?.altitude_pid_ki, D?.altitude_pid_kd]
   };
 
   return {
-    roll, pitch, yaw, yawDes, heading, alt, spd, thr, yawRate,
+    roll, pitch, yaw, yawDes, heading, alt, altTarget, spd, thr, yawRate,
     vbat, batPct, batWarn, batCrit,
     rssi, snr, linkWarn, gpsLock, sats, gpsFix, gpsSpd, gpsAlt, hdop,
     mapLat, mapLon, wpDist, wpIdx, wpTotal, wpBear, wpLat, wpLon, missionPct,
@@ -437,7 +439,7 @@ function PidRow({ label, vals }) {
   const c = isNull ? T.textDim : T.textBright;
   return (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:`1px solid ${T.border}30` }}>
-      <span style={{ font:'400 11px DM Sans', color:T.textDim, width:40 }}>{label}</span>
+      <span style={{ font:'400 11px DM Sans', color:T.textDim, width:58 }}>{label}</span>
       <div style={{ display:'flex', flex:1, justifyContent:'flex-end', gap:10, font:'bold 12px Space Mono', color:c }}>
         <span style={{width:50, textAlign:'right'}}>{isNull?'—':fmt2(vals[0])}</span>
         <span style={{width:50, textAlign:'right'}}>{isNull?'—':fmt2(vals[1])}</span>
@@ -543,7 +545,7 @@ function CommandTerminal({ sendCommand, cmdLog }) {
       <div style={{ display:'flex', gap:6 }}>
         <input value={cmd} onChange={e=>{setCmd(e.target.value); setHIdx(-1);}}
                onKeyDown={handleKeyDown}
-               placeholder="e.g. pid roll 20 0 0.1"
+               placeholder="e.g. target altitude 75"
                style={{ flex:1, background:T.bg, border:`1px solid ${T.borderHi}`, color:T.textBright, padding:'5px 8px', borderRadius:4, font:'11px Space Mono', outline:'none' }} />
         <button onClick={()=>{if(cmd.trim()){sendCommand(cmd);setHistory(p=>[...p,cmd]);setHIdx(-1);setCmd('');}}}
                 style={{ background:T.cyan+'22', color:T.cyan, border:`1px solid ${T.cyan}55`, padding:'0 12px', borderRadius:4, cursor:'pointer', font:'bold 10px DM Sans' }}>SEND</button>
@@ -698,6 +700,7 @@ function App() {
 
         <BigM label="Airspeed"  value={tm.spd != null ? tm.spd.toFixed(1) : null}          unit="m/s"   color={T.cyan} />
         <BigM label="Altitude"  value={tm.alt != null ? tm.alt.toFixed(1) : null}          unit="m AGL" />
+        <BigM label="Alt Target" value={tm.altTarget != null ? tm.altTarget.toFixed(1) : null} unit="m AGL" color={T.green} />
         <BigM label="Heading"   value={tm.heading != null ? pad3(tm.heading)+'°' : null}   unit="MAG" />
         <BigM label="Throttle"  value={tm.thr != null ? Math.round(tm.thr)+'%' : null}     unit=""      warn={tm.thr!=null&&tm.thr>80} />
 
@@ -850,6 +853,7 @@ function App() {
             <PidRow label="Roll"  vals={tm.pid.roll}  />
             <PidRow label="Pitch" vals={tm.pid.pitch} />
             <PidRow label="Yaw"   vals={tm.pid.yaw}   />
+            <PidRow label="Altitude" vals={tm.pid.altitude} />
             <CommandTerminal sendCommand={tm.sendCommand} cmdLog={tm.cmdLog} />
           </Card>
           <Card>

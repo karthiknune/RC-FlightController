@@ -19,12 +19,19 @@ namespace {
 PIDTuningValues g_roll_pid_tuning = {roll_kp, roll_ki, roll_kd};
 PIDTuningValues g_pitch_pid_tuning = {pitch_kp, pitch_ki, pitch_kd};
 PIDTuningValues g_yaw_pid_tuning = {yaw_kp, yaw_ki, yaw_kd};
+PIDTuningValues g_altitude_pid_tuning = {alt_kp, alt_ki, alt_kd};
 LoRaPIDCommandPacket g_pending_pid_command = {};
 volatile bool g_pending_pid_command_valid = false;
 LoRaPIDAckPacket g_last_pid_ack = {};
 volatile bool g_last_pid_ack_valid = false;
+LoRaAltitudeTargetCommandPacket g_pending_altitude_target_command = {};
+volatile bool g_pending_altitude_target_command_valid = false;
+LoRaAltitudeTargetAckPacket g_last_altitude_target_ack = {};
+volatile bool g_last_altitude_target_ack_valid = false;
+float g_target_altitude_agl = target_alt_agl;
 portMUX_TYPE g_pid_command_lock = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE g_tuning_lock = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE g_altitude_target_lock = portMUX_INITIALIZER_UNLOCKED;
 
 bool IsPIDTuningFinite(const PIDTuningValues &tuning) {
     return isfinite(tuning.kp) && isfinite(tuning.ki) && isfinite(tuning.kd);
@@ -57,7 +64,19 @@ bool IsValidPIDCommand(const LoRaPIDCommandPacket &packet) {
         return false;
     }
 
+    if ((packet.axis_mask & LORA_PID_AXIS_ALTITUDE) != 0U &&
+        !IsPIDTuningFinite(packet.altitude)) {
+        return false;
+    }
+
     return true;
+}
+
+bool IsValidAltitudeTargetCommand(const LoRaAltitudeTargetCommandPacket &packet) {
+    return packet.magic == LORA_PID_PROTOCOL_MAGIC &&
+           packet.type == static_cast<uint8_t>(LoRaMessageType::AltitudeTargetCommand) &&
+           isfinite(packet.target_altitude_agl) &&
+           packet.target_altitude_agl >= 0.0f;
 }
 
 void PrintPIDTuning(const char *axis_name, const PIDTuningValues &tuning) {
@@ -128,21 +147,81 @@ void SendPIDAck(const LoRaPIDAckPacket &packet, const char *context) {
                   context);
 }
 
+void QueuePendingAltitudeTargetCommand(const LoRaAltitudeTargetCommandPacket &packet) {
+    portENTER_CRITICAL(&g_pid_command_lock);
+    g_pending_altitude_target_command = packet;
+    g_pending_altitude_target_command_valid = true;
+    portEXIT_CRITICAL(&g_pid_command_lock);
+}
+
+bool TakePendingAltitudeTargetCommand(LoRaAltitudeTargetCommandPacket &packet) {
+    bool has_pending = false;
+    portENTER_CRITICAL(&g_pid_command_lock);
+    if (g_pending_altitude_target_command_valid) {
+        packet = g_pending_altitude_target_command;
+        g_pending_altitude_target_command_valid = false;
+        has_pending = true;
+    }
+    portEXIT_CRITICAL(&g_pid_command_lock);
+    return has_pending;
+}
+
+void CacheLastAltitudeTargetAck(const LoRaAltitudeTargetAckPacket &packet) {
+    portENTER_CRITICAL(&g_pid_command_lock);
+    g_last_altitude_target_ack = packet;
+    g_last_altitude_target_ack_valid = true;
+    portEXIT_CRITICAL(&g_pid_command_lock);
+}
+
+bool GetCachedAltitudeTargetAck(uint8_t sequence, LoRaAltitudeTargetAckPacket &packet) {
+    bool found = false;
+    portENTER_CRITICAL(&g_pid_command_lock);
+    if (g_last_altitude_target_ack_valid && g_last_altitude_target_ack.sequence == sequence) {
+        packet = g_last_altitude_target_ack;
+        found = true;
+    }
+    portEXIT_CRITICAL(&g_pid_command_lock);
+    return found;
+}
+
+void SendAltitudeTargetAck(const LoRaAltitudeTargetAckPacket &packet, const char *context) {
+    const bool ack_sent = lora_send(reinterpret_cast<const uint8_t *>(&packet), sizeof(packet));
+    Serial.printf("[LoRa ACK] altitude target seq=%u target=%.2f %s (%s)\n",
+                  static_cast<unsigned>(packet.sequence),
+                  packet.target_altitude_agl,
+                  ack_sent ? "sent" : "send failed",
+                  context);
+}
+
+void SetTargetAltitudeAGL(float target_altitude_agl) {
+    portENTER_CRITICAL(&g_altitude_target_lock);
+    g_target_altitude_agl = target_altitude_agl;
+    portEXIT_CRITICAL(&g_altitude_target_lock);
+    Serial.printf("[AltHold] Target altitude updated to %.2f m AGL\n", target_altitude_agl);
+}
+
 } // namespace
 
 void GCS_LoadPIDTuningsFromConfig() {
     Serial.println("Loading PID defaults from config...");
+    SetTargetAltitudeAGL(target_alt_agl);
     SetControllerTuning(roll_pid, g_roll_pid_tuning, {roll_kp, roll_ki, roll_kd}, "Roll");
     SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {pitch_kp, pitch_ki, pitch_kd}, "Pitch");
     SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {yaw_kp, yaw_ki, yaw_kd}, "Yaw");
+    SetControllerTuning(altitude_pid, g_altitude_pid_tuning, {alt_kp, alt_ki, alt_kd}, "Altitude");
 
     if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
         float r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd;
-        if (SD_Logger_LoadPIDConfig(r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd)) {
+        float a_kp = alt_kp;
+        float a_ki = alt_ki;
+        float a_kd = alt_kd;
+        if (SD_Logger_LoadPIDConfig(r_kp, r_ki, r_kd, p_kp, p_ki, p_kd,
+                                    y_kp, y_ki, y_kd, a_kp, a_ki, a_kd)) {
             Serial.println("Valid pid_config.json found. Applying saved PID values...");
             SetControllerTuning(roll_pid, g_roll_pid_tuning, {r_kp, r_ki, r_kd}, "Roll");
             SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {p_kp, p_ki, p_kd}, "Pitch");
             SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {y_kp, y_ki, y_kd}, "Yaw");
+            SetControllerTuning(altitude_pid, g_altitude_pid_tuning, {a_kp, a_ki, a_kd}, "Altitude");
         } else {
             Serial.println("No valid pid_config.json found on SD card. Proceeding with defaults.");
         }
@@ -151,6 +230,7 @@ void GCS_LoadPIDTuningsFromConfig() {
     PrintPIDTuning("Roll", g_roll_pid_tuning);
     PrintPIDTuning("Pitch", g_pitch_pid_tuning);
     PrintPIDTuning("Yaw", g_yaw_pid_tuning);
+    PrintPIDTuning("Altitude", g_altitude_pid_tuning);
 }
 
 void GCS_ProcessIncomingPacket(const uint8_t* buffer, size_t length) {
@@ -173,6 +253,25 @@ void GCS_ProcessIncomingPacket(const uint8_t* buffer, size_t length) {
                               static_cast<unsigned>(packet.axis_mask));
             }
         }
+    } else if (length == sizeof(LoRaAltitudeTargetCommandPacket)) {
+        LoRaAltitudeTargetCommandPacket packet = {};
+        memcpy(&packet, buffer, sizeof(packet));
+
+        if (!IsValidAltitudeTargetCommand(packet)) {
+            Serial.println("[LoRa RX] Ignored invalid altitude target command packet.");
+        } else {
+            LoRaAltitudeTargetAckPacket cached_ack = {};
+            if (GetCachedAltitudeTargetAck(packet.sequence, cached_ack)) {
+                Serial.printf("[LoRa RX] Duplicate altitude target command seq=%u. Resending ACK.\n",
+                              static_cast<unsigned>(packet.sequence));
+                SendAltitudeTargetAck(cached_ack, "duplicate");
+            } else {
+                QueuePendingAltitudeTargetCommand(packet);
+                Serial.printf("[LoRa RX] Queued altitude target command seq=%u target=%.2f m AGL\n",
+                              static_cast<unsigned>(packet.sequence),
+                              packet.target_altitude_agl);
+            }
+        }
     } else {
         Serial.printf("[LoRa RX] Ignored unexpected packet of %u bytes.\n",
                       static_cast<unsigned>(length));
@@ -181,56 +280,79 @@ void GCS_ProcessIncomingPacket(const uint8_t* buffer, size_t length) {
 
 void GCS_ApplyPendingCommands() {
     LoRaPIDCommandPacket packet = {};
-    if (!TakePendingPIDCommand(packet)) {
-        return;
-    }
+    if (TakePendingPIDCommand(packet)) {
+        Serial.printf("[LoRa RX] Applying PID command seq=%u mask=0x%02X\n",
+                      static_cast<unsigned>(packet.sequence),
+                      static_cast<unsigned>(packet.axis_mask));
 
-    Serial.printf("[LoRa RX] Applying PID command seq=%u mask=0x%02X\n",
-                  static_cast<unsigned>(packet.sequence),
-                  static_cast<unsigned>(packet.axis_mask));
+        if ((packet.axis_mask & LORA_PID_AXIS_ROLL) != 0U) {
+            SetControllerTuning(roll_pid, g_roll_pid_tuning, packet.roll, "Roll");
+        }
+        if ((packet.axis_mask & LORA_PID_AXIS_PITCH) != 0U) {
+            SetControllerTuning(pitch_pid, g_pitch_pid_tuning, packet.pitch, "Pitch");
+        }
+        if ((packet.axis_mask & LORA_PID_AXIS_YAW) != 0U) {
+            SetControllerTuning(yaw_pid, g_yaw_pid_tuning, packet.yaw, "Yaw");
+        }
+        if ((packet.axis_mask & LORA_PID_AXIS_ALTITUDE) != 0U) {
+            SetControllerTuning(altitude_pid, g_altitude_pid_tuning, packet.altitude, "Altitude");
+        }
 
-    if ((packet.axis_mask & LORA_PID_AXIS_ROLL) != 0U) {
-        SetControllerTuning(roll_pid, g_roll_pid_tuning, packet.roll, "Roll");
-    }
-    if ((packet.axis_mask & LORA_PID_AXIS_PITCH) != 0U) {
-        SetControllerTuning(pitch_pid, g_pitch_pid_tuning, packet.pitch, "Pitch");
-    }
-    if ((packet.axis_mask & LORA_PID_AXIS_YAW) != 0U) {
-        SetControllerTuning(yaw_pid, g_yaw_pid_tuning, packet.yaw, "Yaw");
-    }
+        LoRaPIDAckPacket ack = {};
+        ack.magic = LORA_PID_PROTOCOL_MAGIC;
+        ack.type = static_cast<uint8_t>(LoRaMessageType::PIDAck);
+        ack.sequence = packet.sequence;
+        ack.axis_mask = packet.axis_mask;
+        ack.status = static_cast<uint8_t>(LoRaPIDAckStatus::Applied);
 
-    LoRaPIDAckPacket ack = {};
-    ack.magic = LORA_PID_PROTOCOL_MAGIC;
-    ack.type = static_cast<uint8_t>(LoRaMessageType::PIDAck);
-    ack.sequence = packet.sequence;
-    ack.axis_mask = packet.axis_mask;
-    ack.status = static_cast<uint8_t>(LoRaPIDAckStatus::Applied);
-
-    portENTER_CRITICAL(&g_tuning_lock);
-    ack.roll = g_roll_pid_tuning;
-    ack.pitch = g_pitch_pid_tuning;
-    ack.yaw = g_yaw_pid_tuning;
-    portEXIT_CRITICAL(&g_tuning_lock);
-
-    CacheLastPIDAck(ack);
-    SendPIDAck(ack, "applied");
-
-    if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
-        PIDTuningValues roll_copy, pitch_copy, yaw_copy;
         portENTER_CRITICAL(&g_tuning_lock);
-        roll_copy = g_roll_pid_tuning;
-        pitch_copy = g_pitch_pid_tuning;
-        yaw_copy = g_yaw_pid_tuning;
+        ack.roll = g_roll_pid_tuning;
+        ack.pitch = g_pitch_pid_tuning;
+        ack.yaw = g_yaw_pid_tuning;
+        ack.altitude = g_altitude_pid_tuning;
         portEXIT_CRITICAL(&g_tuning_lock);
 
-        if (SD_Logger_SavePIDConfig(
-                roll_copy.kp, roll_copy.ki, roll_copy.kd,
-                pitch_copy.kp, pitch_copy.ki, pitch_copy.kd,
-                yaw_copy.kp, yaw_copy.ki, yaw_copy.kd)) {
-            Serial.println("[SD] Updated PID config saved to pid_config.json");
-        } else {
-            Serial.println("[SD] Failed to save PID config to SD card.");
+        CacheLastPIDAck(ack);
+        SendPIDAck(ack, "applied");
+
+        if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
+            PIDTuningValues roll_copy, pitch_copy, yaw_copy, altitude_copy;
+            portENTER_CRITICAL(&g_tuning_lock);
+            roll_copy = g_roll_pid_tuning;
+            pitch_copy = g_pitch_pid_tuning;
+            yaw_copy = g_yaw_pid_tuning;
+            altitude_copy = g_altitude_pid_tuning;
+            portEXIT_CRITICAL(&g_tuning_lock);
+
+            if (SD_Logger_SavePIDConfig(
+                    roll_copy.kp, roll_copy.ki, roll_copy.kd,
+                    pitch_copy.kp, pitch_copy.ki, pitch_copy.kd,
+                    yaw_copy.kp, yaw_copy.ki, yaw_copy.kd,
+                    altitude_copy.kp, altitude_copy.ki, altitude_copy.kd)) {
+                Serial.println("[SD] Updated PID config saved to pid_config.json");
+            } else {
+                Serial.println("[SD] Failed to save PID config to SD card.");
+            }
         }
+    }
+
+    LoRaAltitudeTargetCommandPacket altitude_packet = {};
+    if (TakePendingAltitudeTargetCommand(altitude_packet)) {
+        Serial.printf("[LoRa RX] Applying altitude target command seq=%u target=%.2f m AGL\n",
+                      static_cast<unsigned>(altitude_packet.sequence),
+                      altitude_packet.target_altitude_agl);
+
+        SetTargetAltitudeAGL(altitude_packet.target_altitude_agl);
+
+        LoRaAltitudeTargetAckPacket ack = {};
+        ack.magic = LORA_PID_PROTOCOL_MAGIC;
+        ack.type = static_cast<uint8_t>(LoRaMessageType::AltitudeTargetAck);
+        ack.sequence = altitude_packet.sequence;
+        ack.status = static_cast<uint8_t>(LoRaPIDAckStatus::Applied);
+        ack.target_altitude_agl = GCS_GetTargetAltitudeAGL();
+
+        CacheLastAltitudeTargetAck(ack);
+        SendAltitudeTargetAck(ack, "applied");
     }
 }
 
@@ -252,4 +374,12 @@ void GCS_PopulateTelemetryTuning(telemetrydata& snapshot) {
     snapshot.headingerror_pid_ki = headingerror_pid.getki();
     snapshot.headingerror_pid_kd = headingerror_pid.getkd();
     portEXIT_CRITICAL(&g_tuning_lock);
+}
+
+float GCS_GetTargetAltitudeAGL() {
+    float target = target_alt_agl;
+    portENTER_CRITICAL(&g_altitude_target_lock);
+    target = g_target_altitude_agl;
+    portEXIT_CRITICAL(&g_altitude_target_lock);
+    return target;
 }

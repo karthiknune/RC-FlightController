@@ -6,7 +6,7 @@ broadcasts each complete telemetry frame as JSON over WebSocket.
 
 Install:   pip install pyserial websockets
 Usage:     python gcs_bridge.py --port /dev/ttyUSB0
-           python gcs_bridge.py --port COM5 --baud 115200 --ws-port 8765
+           python gcs_bridge.py --port COM20 --baud 921600 --ws-port 8765
            python gcs_bridge.py --list-ports
 """
 
