@@ -301,6 +301,29 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
       packet.failsafe_status);
 
   Serial.printf(
+      "Status    armed=%u imu=%u baro=%u gps=%u rx=%u fix=%ld\n",
+      static_cast<unsigned>(packet.armed),
+      static_cast<unsigned>(packet.imu_healthy),
+      static_cast<unsigned>(packet.baro_healthy),
+      static_cast<unsigned>(packet.gps_healthy),
+      static_cast<unsigned>(packet.rx_healthy),
+      static_cast<long>(packet.gps_fix_quality));
+
+  Serial.printf(
+      "RX        thr=%.0f  ail=%.0f  ele=%.0f  rud=%.0f  mode=%.0f\n",
+      packet.rx_throttle_pwm,
+      packet.rx_aileron_pwm,
+      packet.rx_elevator_pwm,
+      packet.rx_rudder_pwm,
+      packet.rx_mode_pwm);
+
+  Serial.printf(
+      "PIDOut    roll=%.2f  pitch=%.2f  yaw=%.2f\n",
+      packet.roll_pid_out,
+      packet.pitch_pid_out,
+      packet.yaw_pid_out);
+
+  Serial.printf(
       "ActivePID roll_p=%.3f roll_i=%.3f roll_d=%.3f pitch_p=%.3f pitch_i=%.3f pitch_d=%.3f yaw_p=%.3f yaw_i=%.3f yaw_d=%.3f\n",
       packet.roll_pid_kp, packet.roll_pid_ki, packet.roll_pid_kd,
       packet.pitch_pid_kp, packet.pitch_pid_ki, packet.pitch_pid_kd,
