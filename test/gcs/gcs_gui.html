@@ -12,15 +12,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #070b12; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #1a2540; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: #3a4d70; border-radius: 2px; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-    .leaflet-container { background:#050d1a !important; font-family:'DM Sans',sans-serif; }
-    .leaflet-control-zoom a { background:#0e1628 !important; color:#4a7aaa !important; border-color:#172035 !important; }
-    .leaflet-control-zoom a:hover { background:#172035 !important; color:#00d8f0 !important; }
-    .leaflet-tile-pane { filter: brightness(0.85) saturate(0.7); }
+    .leaflet-container { background:#1d2a48 !important; font-family:'DM Sans',sans-serif; }
+    .leaflet-control-zoom a { background:#26334f !important; color:#a8c5e8 !important; border-color:#3a4d70 !important; }
+    .leaflet-control-zoom a:hover { background:#324063 !important; color:#00d8f0 !important; }
+    .leaflet-tile-pane { filter: brightness(1.15) saturate(0.95); }
   </style>
 </head>
 <body>
@@ -29,9 +29,9 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 const T = {
-  bg:'#070b12', panel:'#0b1120', panelAlt:'#0e1628', border:'#172035', borderHi:'#223050',
-  text:'#b8cce0', textDim:'#3d5570', textBright:'#ddeeff',
-  cyan:'#00d8f0', green:'#00e880', amber:'#f0a832', red:'#ff3c58', violet:'#9b6aff', sky:'#4488ff',
+  bg:'#1a2540', panel:'#22304e', panelAlt:'#293a5c', border:'#3a4d70', borderHi:'#52668f',
+  text:'#dde9f5', textDim:'#9fb3cf', textBright:'#f4f9ff',
+  cyan:'#00d8f0', green:'#00e880', amber:'#f5b94a', red:'#ff5878', violet:'#b48bff', sky:'#5a98ff',
 };
 
 const fmtTime = s => {
@@ -59,7 +59,8 @@ function useGCSData() {
   const retryRef    = useRef(null);
   const connAtRef   = useRef(null);
   const prevYawRef  = useRef(null);
-  const hist = useRef({ alt:[],spd:[],roll:[],pitch:[],thr:[],altDes:[],rollDes:[],pitchDes:[],yaw:[],yawDes:[] });
+  const hist = useRef({ alt:[],spd:[],roll:[],pitch:[],thr:[],altDes:[],rollDes:[],pitchDes:[],yaw:[],yawDes:[],
+                        rollOut:[],pitchOut:[],yawOut:[],altOut:[] });
   const MAX = 180;
 
   // Clock tick — only for flight timer, not for pushing fake data
@@ -118,6 +119,10 @@ function useGCSData() {
         push(h.altDes,   D.des_altitude);
         push(h.spd,      D.airspeed);
         push(h.thr,      D.throttle != null ? D.throttle * 100 : null);
+        push(h.rollOut,  D.roll_pid_out);
+        push(h.pitchOut, D.pitch_pid_out);
+        push(h.yawOut,   D.yaw_pid_out);
+        push(h.altOut,   D.alt_pid_out);
 
         forceRender(n => n+1);
       } catch {}
@@ -277,7 +282,7 @@ function ArtificialHorizon({ roll, pitch, hasData, size = 224 }) {
     ctx.strokeStyle=T.borderHi; ctx.lineWidth=2; ctx.stroke();
     // No-data overlay
     if (!hasData) {
-      ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fillStyle='rgba(7,11,18,0.55)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fillStyle='rgba(26,37,64,0.55)'; ctx.fill();
       ctx.font='bold 13px DM Sans'; ctx.fillStyle=T.textDim; ctx.textAlign='center';
       ctx.fillText('NO DATA', cx, cy);
     }
@@ -416,6 +421,75 @@ function DualChart({ actual=[], desired=[], color=T.cyan, min, max, label, unit,
   );
 }
 
+/* ─── MULTI-SERIES CHART (PID outputs) ──────────────────────────── */
+function MultiChart({ series=[], label, unit, height=68 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W=cv.width, H=height;
+    ctx.clearRect(0,0,W,H);
+    const populated = series.filter(s => s.data && s.data.length > 1);
+    if (!populated.length) {
+      ctx.fillStyle=T.textDim; ctx.font='10px DM Sans'; ctx.textAlign='center';
+      ctx.fillText('Waiting for data…', W/2, H/2+4);
+      return;
+    }
+    const all = populated.flatMap(s => s.data);
+    const lo = Math.min(...all) - 1, hi = Math.max(...all) + 1, rng = hi - lo || 1;
+    const tx = (i,len) => (i/(len-1))*W, ty = v => H - ((v - lo) / rng) * H;
+    ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1;
+    ctx.fillStyle=T.textDim; ctx.font='8px Space Mono'; ctx.textAlign='left';
+    for(let i=0;i<=4;i++){
+      const y=(i/4)*H; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+      if(i<4) ctx.fillText(((hi-(i/4)*rng).toFixed(0)),3,y+9);
+    }
+    if(lo<0&&hi>0){
+      const zy=ty(0); ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
+      ctx.setLineDash([3,4]); ctx.beginPath(); ctx.moveTo(0,zy); ctx.lineTo(W,zy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    populated.forEach(s => {
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.lineJoin='round'; ctx.beginPath();
+      s.data.forEach((v,i) => i===0 ? ctx.moveTo(tx(i,s.data.length),ty(v)) : ctx.lineTo(tx(i,s.data.length),ty(v)));
+      ctx.stroke();
+      const lx = tx(s.data.length-1,s.data.length), ly = ty(s.data[s.data.length-1]);
+      ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fillStyle=s.color; ctx.fill();
+    });
+  }, [series, height]);
+
+  return (
+    <div style={{ background:T.panel, border:`1px solid ${T.border}`, borderRadius:6, padding:'9px 12px', display:'flex', flexDirection:'column', gap:7, overflow:'hidden' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ font:'600 10px DM Sans', color:T.textDim, textTransform:'uppercase', letterSpacing:'0.1em' }}>{label}</span>
+        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          {series.map(s => (
+            <div key={s.name} style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <svg width="14" height="6"><line x1="0" y1="3" x2="14" y2="3" stroke={s.color} strokeWidth="2"/></svg>
+              <span style={{ font:'9px DM Sans', color:T.textDim }}>{s.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:14, alignItems:'baseline' }}>
+        {series.map(s => {
+          const last = s.data && s.data.length ? s.data[s.data.length-1] : null;
+          return (
+            <div key={s.name} style={{ display:'flex', alignItems:'baseline', gap:3 }}>
+              <span style={{ font:'400 9px DM Sans', color:T.textDim }}>{s.name}</span>
+              <span style={{ font:'bold 13px Space Mono', color:last!=null?s.color:T.textDim, lineHeight:1 }}>
+                {last != null ? last.toFixed(1) : '—'}
+              </span>
+              <span style={{ font:'400 9px DM Sans', color:T.textDim }}>{unit}</span>
+            </div>
+          );
+        })}
+      </div>
+      <canvas ref={ref} width={400} height={height} style={{ display:'block', width:'100%', height }} />
+    </div>
+  );
+}
+
 /* ─── ATOMS ──────────────────────────────────────────────────────── */
 function Dot({ s='off', size=8 }) {
   const clr = { ok:T.green, warn:T.amber, err:T.red, off:T.textDim }[s] || T.textDim;
@@ -505,6 +579,40 @@ function BigM({ label, value, unit, color=T.textBright, warn, crit }) {
     </div>
   );
 }
+function AltitudeTargetCard({ currentTarget, sendCommand }) {
+  const [val, setVal] = useState('');
+  const submit = () => {
+    const num = parseFloat(val);
+    if (Number.isFinite(num)) {
+      sendCommand(`target altitude ${num}`);
+      setVal('');
+    }
+  };
+  return (
+    <Card>
+      <SH label="Altitude Target" accent={T.green} />
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', marginBottom:6, borderBottom:`1px solid ${T.border}` }}>
+        <span style={{ font:'400 11px DM Sans', color:T.textDim }}>Current</span>
+        <span style={{ font:'bold 16px Space Mono', color:currentTarget!=null?T.green:T.textDim }}>
+          {currentTarget != null ? currentTarget.toFixed(1) : '—'}
+          <span style={{ font:'400 10px DM Sans', color:T.textDim, marginLeft:4 }}>m AGL</span>
+        </span>
+      </div>
+      <div style={{ display:'flex', gap:6 }}>
+        <input value={val} onChange={e=>setVal(e.target.value)}
+               onKeyDown={e=>{ if(e.key==='Enter') submit(); }}
+               placeholder="Altitude (m AGL)" type="number" step="0.5"
+               style={{ flex:1, background:T.bg, border:`1px solid ${T.borderHi}`, color:T.textBright, padding:'5px 8px', borderRadius:4, font:'11px Space Mono', outline:'none' }} />
+        <button onClick={submit}
+                style={{ background:T.green+'22', color:T.green, border:`1px solid ${T.green}55`, padding:'0 14px', borderRadius:4, cursor:'pointer', font:'bold 10px DM Sans' }}>SET</button>
+      </div>
+      <div style={{ font:'9px Space Mono', color:T.textDim+'aa', marginTop:6 }}>
+        sends: <span style={{ color:T.textDim }}>target altitude &lt;value&gt;</span>
+      </div>
+    </Card>
+  );
+}
+
 function CommandTerminal({ sendCommand, cmdLog }) {
   const [cmd, setCmd] = useState('');
   const [history, setHistory] = useState([]);
@@ -621,7 +729,7 @@ function MissionMap({ lat, lon, heading, wpLat, wpLon, wpIdx }) {
       <div ref={divRef} style={{ width:'100%', height:'100%' }} />
       {lat == null && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-                      background:'rgba(7,11,18,0.7)', zIndex:999, flexDirection:'column', gap:8 }}>
+                      background:'rgba(26,37,64,0.7)', zIndex:999, flexDirection:'column', gap:8 }}>
           <span style={{ font:'600 12px DM Sans', color:T.textDim }}>Waiting for GPS lock…</span>
           <span style={{ font:'9px Space Mono', color:T.textDim+'80' }}>Map will appear on first fix</span>
         </div>
@@ -783,7 +891,7 @@ function App() {
 
         {/* CENTER */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, padding:11, gap:10, overflow:'hidden' }}>
-          <div style={{ background:'#050d1a', border:`1px solid ${T.border}`, borderRadius:7, overflow:'hidden', flexShrink:0, height:220 }}>
+          <div style={{ background:T.panelAlt, border:`1px solid ${T.border}`, borderRadius:7, overflow:'hidden', flexShrink:0, height:220 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'5px 12px', borderBottom:`1px solid ${T.border}`, background:T.panel }}>
               <span style={{ font:'600 9px DM Sans', color:T.textDim, textTransform:'uppercase', letterSpacing:'0.12em' }}>Mission Map</span>
               {tm.connected && !tm.gpsLock && <span style={{ font:'9px DM Sans', color:T.amber }}>Waiting for GPS lock…</span>}
@@ -794,11 +902,19 @@ function App() {
                           wpLat={tm.wpLat} wpLon={tm.wpLon} wpIdx={tm.wpIdx} />
             </div>
           </div>
-          <div style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', gap:9, minHeight:0 }}>
-            <DualChart actual={[...tm.hist.roll]}  desired={[...tm.hist.rollDes]}  color={T.cyan}   label="Roll"     unit="°"   min={-50} max={50}       height={58} />
-            <DualChart actual={[...tm.hist.pitch]} desired={[...tm.hist.pitchDes]} color={T.amber}  label="Pitch"    unit="°"   min={-30} max={30}       height={58} />
-            <DualChart actual={[...tm.hist.yaw]}   desired={[...tm.hist.yawDes]}   color={T.violet} label="Yaw"      unit="°"   min={yawMin} max={yawMax} height={58} />
-            <DualChart actual={[...tm.hist.alt]}   desired={[...tm.hist.altDes]}   color={T.green}  label="Altitude" unit="m"   min={null} max={null}    height={58} />
+          <div style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr 1fr', gap:9, minHeight:0 }}>
+            <DualChart actual={[...tm.hist.roll]}  desired={[...tm.hist.rollDes]}  color={T.cyan}   label="Roll"     unit="°"   min={-50} max={50}       height={50} />
+            <DualChart actual={[...tm.hist.pitch]} desired={[...tm.hist.pitchDes]} color={T.amber}  label="Pitch"    unit="°"   min={-30} max={30}       height={50} />
+            <DualChart actual={[...tm.hist.yaw]}   desired={[...tm.hist.yawDes]}   color={T.violet} label="Yaw"      unit="°"   min={yawMin} max={yawMax} height={50} />
+            <DualChart actual={[...tm.hist.alt]}   desired={[...tm.hist.altDes]}   color={T.green}  label="Altitude" unit="m"   min={null} max={null}    height={50} />
+            <div style={{ gridColumn:'1 / -1' }}>
+              <MultiChart label="PID Outputs" unit="µs" height={62} series={[
+                { name:'Roll',  color:T.cyan,   data:[...tm.hist.rollOut]  },
+                { name:'Pitch', color:T.amber,  data:[...tm.hist.pitchOut] },
+                { name:'Yaw',   color:T.violet, data:[...tm.hist.yawOut]   },
+                { name:'Alt',   color:T.green,  data:[...tm.hist.altOut]   },
+              ]} />
+            </div>
           </div>
         </div>
 
@@ -843,6 +959,7 @@ function App() {
               <Row label="WPs Done" value={tm.wpIdx!=null ? `${Math.max(0,tm.wpIdx-1)} / ${tm.wpTotal??'—'}` : null} mono={false} />
             </div>
           </Card>
+          <AltitudeTargetCard currentTarget={tm.altTarget} sendCommand={tm.sendCommand} />
           <Card>
             <SH label="Active PID Tuning" accent={T.violet} />
             <div style={{ display:'flex', justifyContent:'flex-end', gap:10, paddingBottom:2, font:'600 10px DM Sans', color:T.textDim }}>

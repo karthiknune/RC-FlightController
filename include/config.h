@@ -99,7 +99,7 @@ constexpr int IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS = 10;
 
 //Barometer-------------
 constexpr bool BARO_DEBUG_OUTPUT_ENABLED = false;
-constexpr float SEALEVELPRESSURE_HPA = 1031.2f; // adjust based on local sea level press
+constexpr float SEALEVELPRESSURE_HPA = 1031.1f; // adjust based on local sea level press
 //Barometer-------------
 
 //Airspeed-------------

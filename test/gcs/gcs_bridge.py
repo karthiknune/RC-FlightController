@@ -39,9 +39,12 @@ PATTERNS = {
     # Setpoint  roll=0.00  pitch=0.00  yaw=45.00   (NEW — from patch)
     'setpoint': re.compile(
         r'Setpoint\s+roll=(-?[\d.]+)\s+pitch=(-?[\d.]+)\s+yaw=(-?[\d.]+)'),
-    # Control   thr=0.65  des_thr=0.70  airspeed=18.50  (NEW — from patch)
+    # Control   thr=0.65  des_thr=0.70  airspeed=18.50  alt_pid=12.30
     'control': re.compile(
-        r'Control\s+thr=(-?[\d.]+)\s+des_thr=(-?[\d.]+)\s+airspeed=(-?[\d.]+)'),
+        r'Control\s+thr=(-?[\d.]+)\s+des_thr=(-?[\d.]+)\s+airspeed=(-?[\d.]+)(?:\s+alt_pid=(-?[\d.]+))?'),
+    # PIDOut    roll=12.50  pitch=-3.20  yaw=0.40
+    'pid_out': re.compile(
+        r'PIDOut\s+roll=(-?[\d.]+)\s+pitch=(-?[\d.]+)\s+yaw=(-?[\d.]+)'),
     # Altitude  alt=100.50  baro=100.20  target=100.00
     'altitude': re.compile(
         r'Altitude\s+alt=(-?[\d.]+)\s+baro=(-?[\d.]+)\s+target=(-?[\d.]+)'),
@@ -56,6 +59,12 @@ PATTERNS = {
         r'WPTarget\s+lat=(-?[\d.]+)\s+lon=(-?[\d.]+)\s+alt=(-?[\d.]+)\s+leg=(-?[\d.]+)\s+miss=(-?[\d.]+)'),
     # Failsafe  fs=0  (NEW — from patch)
     'failsafe': re.compile(r'Failsafe\s+fs=(-?[\d.]+)'),
+    # Status    armed=0 imu=1 baro=1 gps=1 rx=1 fix=3
+    'status': re.compile(
+        r'Status\s+armed=(\d+)\s+imu=(\d+)\s+baro=(\d+)\s+gps=(\d+)\s+rx=(\d+)\s+fix=(-?\d+)'),
+    # RX        thr=1500  ail=1500  ele=1500  rud=1500  mode=1500
+    'rx': re.compile(
+        r'RX\s+thr=(-?[\d.]+)\s+ail=(-?[\d.]+)\s+ele=(-?[\d.]+)\s+rud=(-?[\d.]+)\s+mode=(-?[\d.]+)'),
     # ActivePID roll_p=...
     'active_pid': re.compile(
         r'ActivePID\s+roll_p=(-?[\d.]+)\s+roll_i=(-?[\d.]+)\s+roll_d=(-?[\d.]+)\s+pitch_p=(-?[\d.]+)\s+pitch_i=(-?[\d.]+)\s+pitch_d=(-?[\d.]+)\s+yaw_p=(-?[\d.]+)\s+yaw_i=(-?[\d.]+)\s+yaw_d=(-?[\d.]+)'),
@@ -100,6 +109,17 @@ def parse_line(line: str, packet: dict) -> bool:
     m = PATTERNS['control'].search(line)
     if m:
         packet.update({'throttle': float(m.group(1)), 'des_throttle': float(m.group(2)), 'airspeed': float(m.group(3))})
+        if m.group(4) is not None:
+            packet['alt_pid_out'] = float(m.group(4))
+        return False
+
+    m = PATTERNS['pid_out'].search(line)
+    if m:
+        packet.update({
+            'roll_pid_out':  float(m.group(1)),
+            'pitch_pid_out': float(m.group(2)),
+            'yaw_pid_out':   float(m.group(3)),
+        })
         return False
 
     m = PATTERNS['altitude'].search(line)
@@ -143,6 +163,29 @@ def parse_line(line: str, packet: dict) -> bool:
     m = PATTERNS['failsafe'].search(line)
     if m:
         packet.update({'failsafe_status': float(m.group(1))})
+        return False
+
+    m = PATTERNS['status'].search(line)
+    if m:
+        packet.update({
+            'arm_status':       int(m.group(1)),
+            'imu_healthy':      int(m.group(2)),
+            'baro_healthy':     int(m.group(3)),
+            'gps_healthy':      int(m.group(4)),
+            'rx_healthy':       int(m.group(5)),
+            'gps_fix_quality':  int(m.group(6)),
+        })
+        return False
+
+    m = PATTERNS['rx'].search(line)
+    if m:
+        packet.update({
+            'rx_throttle_pwm': float(m.group(1)),
+            'rx_aileron_pwm':  float(m.group(2)),
+            'rx_elevator_pwm': float(m.group(3)),
+            'rx_rudder_pwm':   float(m.group(4)),
+            'rx_mode_pwm':     float(m.group(5)),
+        })
         return False
 
     m = PATTERNS['active_pid'].search(line)
