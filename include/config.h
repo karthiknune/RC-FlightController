@@ -214,7 +214,7 @@ constexpr float rudder_min_deflection_deg = -40.0f;
 //Limits
 
 const float max_roll_angle = 45.0f; 
-const float max_pitch_angle = 15.0f; 
+const float max_pitch_angle = 10.0f; 
 const float max_yaw_angle = 30.0f;
 
 ///tuning parameters
@@ -251,7 +251,7 @@ const float alt_kp = 1.0f;
 const float alt_ki = 0.0f;
 const float alt_kd = 0.1f;
 const float max_alt_output = max_pitch_angle;
-const float max_alt_integral = 10.0f;
+const float max_alt_integral = 5.0f;
 
 
 //althold
@@ -261,9 +261,11 @@ const float target_alt_agl = 50.0f; // target altitude relative to takeoff point
 
 //waypoints
 constexpr float WAYPOINT_ACCEPTANCE_RADIUS_METERS = 5.0f;
-constexpr float WAYPOINT_CONTROL_DT_SECONDS = 0.1f;
-constexpr float WAYPOINT_HEADING_TO_ROLL_KP = 0.5f;
 constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
+// Heading source for waypoint mode:
+//   true  -> IMU yaw (nose direction; valid at any speed; ignores wind drift)
+//   false -> GPS course-over-ground (true ground track; gated by WAYPOINT_MIN_GROUND_SPEED_MPS)
+constexpr bool WAYPOINT_USE_IMU_YAW = true;
 
 const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {

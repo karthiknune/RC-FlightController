@@ -88,7 +88,7 @@ FlightMode DetermineFlightMode() {
     if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
         return FlightMode::AltHold;
     }
-    return FlightMode::Glide;
+    return FlightMode::Waypoint;
 }
 
 void InitializeFlightMode(FlightMode mode) {
@@ -150,6 +150,9 @@ telemetrydata BuildTelemetrySnapshot() {
     } else {
         snapshot.altitude = -1.0f;
     }
+    snapshot.des_altitude = active_flight_mode == FlightMode::AltHold
+        ? target_alt_agl
+        : navigation.get_target_altitude();
     snapshot.airspeed = airspeed_data.healthy ? airspeed_data.airspeed_mps : 0.0f;
     snapshot.gps_lat = static_cast<float>(gps_data.latitude);
     snapshot.gps_long = static_cast<float>(gps_data.longitude);

@@ -32,9 +32,9 @@ void mode_waypoint_run(){
 
     if (navigation.mission_completed() || !gps_data.lock_acquired || !home_is_set()) {
         const float level_roll_output =
-            roll_pid.compute(0.0f, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
+            roll_pid.compute(0.0f, imu_data.roll, flight_control_dt_seconds);
         const float level_pitch_output =
-            pitch_pid.compute(2.0f, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+            pitch_pid.compute(2.0f, imu_data.pitch, flight_control_dt_seconds);
 
         motormixer_compute(throttle_output, level_roll_output, level_pitch_output, 0.0f);
         return;
@@ -45,26 +45,32 @@ void mode_waypoint_run(){
     const float target_altitude_agl = target_altitude;
 
 
-    const float actual_heading = gps_data.heading;
+    // Heading source selected by WAYPOINT_USE_IMU_YAW in config.h.
+    const float actual_heading = WAYPOINT_USE_IMU_YAW ? imu_data.yaw : gps_data.heading;
     const float actual_altitude_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
     const float actual_altitude_agl = calc_AGL(actual_altitude_msl);
 
+    // GPS course-over-ground is unreliable below WAYPOINT_MIN_GROUND_SPEED_MPS;
+    // IMU yaw is valid at any speed.
+    const bool heading_valid =
+        WAYPOINT_USE_IMU_YAW || (gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS);
+
     float desired_roll = 0.0f;
-    if (gps_data.speed >= WAYPOINT_MIN_GROUND_SPEED_MPS) {
-        float heading_error = math::wrap_heading_error(target_heading - actual_heading);
+    if (heading_valid) {
+        const float heading_error = math::wrap_heading_error(target_heading - actual_heading);
         const float desired_heading_error = 0.0f;
-        desired_roll = headingerror_pid.compute(desired_heading_error, heading_error, WAYPOINT_CONTROL_DT_SECONDS);
+        desired_roll = headingerror_pid.compute(heading_error, desired_heading_error, flight_control_dt_seconds);
     }
     desired_roll = math::clamp_value(desired_roll, -max_roll_angle, max_roll_angle);
 
     float desired_pitch =
-        altitude_pid.compute(target_altitude_agl, actual_altitude_agl, WAYPOINT_CONTROL_DT_SECONDS);
+        altitude_pid.compute(target_altitude_agl, actual_altitude_agl, flight_control_dt_seconds);
     desired_pitch = math::clamp_value(desired_pitch, -max_pitch_angle, max_pitch_angle);
 
     const float roll_output =
-        roll_pid.compute(desired_roll, imu_data.roll, WAYPOINT_CONTROL_DT_SECONDS);
+        roll_pid.compute(desired_roll, imu_data.roll, flight_control_dt_seconds);
     const float pitch_output =
-        pitch_pid.compute(desired_pitch, imu_data.pitch, WAYPOINT_CONTROL_DT_SECONDS);
+        pitch_pid.compute(desired_pitch, imu_data.pitch, flight_control_dt_seconds);
 
     if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
         Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
