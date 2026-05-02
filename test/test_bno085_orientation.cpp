@@ -6,7 +6,7 @@
 namespace
 {
     constexpr uint32_t kImuReadPeriodMs = 10; // 100 Hz
-    constexpr uint32_t kPrintPeriodMs = 200;  // 5 Hz print rate
+    constexpr uint32_t kPrintPeriodMs = 20;  // 5 Hz print rate
 
     IMUData_raw g_imu_data = {};
     uint32_t g_last_imu_read_ms = 0;

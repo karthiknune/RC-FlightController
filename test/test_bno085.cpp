@@ -75,7 +75,8 @@ void loop()
         bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 20000);
     }
 
-    if (bno08x.getSensorEvent(&sensorValue))
+    // Drain the event queue to prevent backlog
+    while (bno08x.getSensorEvent(&sensorValue))
     {
         switch (sensorValue.sensorId)
         {
@@ -110,5 +111,5 @@ void loop()
     }
     SensorBus_Unlock();
 
-    delay(100);
+    delay(10);
 }
