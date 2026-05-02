@@ -5,8 +5,12 @@
 #include "config.h"
 #include "hal/sensors/sensor_bus.h"
 
-Adafruit_BNO08x bno08x;
-sh2_SensorValue_t sensorValue;
+namespace
+{
+    Adafruit_BNO08x bno08x;
+    sh2_SensorValue_t sensorValue;
+
+}
 
 void setup()
 {

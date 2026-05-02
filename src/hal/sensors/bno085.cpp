@@ -7,10 +7,9 @@
 #include "config.h"
 #include "hal/sensors/sensor_bus.h"
 
-Adafruit_BNO08x bno08x;
-
 namespace
 {
+    Adafruit_BNO08x bno08x;
     bool g_bno_ready = false;
     uint32_t g_last_init_attempt_ms = 0;
     sh2_SensorValue_t sensorValue;
