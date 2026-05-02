@@ -228,7 +228,8 @@ bool SD_Logger_IsReady() {
 bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
                              float p_kp, float p_ki, float p_kd,
                              float y_kp, float y_ki, float y_kd,
-                             float a_kp, float a_ki, float a_kd) {
+                             float a_kp, float a_ki, float a_kd,
+                             float h_kp, float h_ki, float h_kd) {
     if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
         return false;
     }
@@ -244,9 +245,9 @@ bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
         return false;
     }
 
-    file.printf("{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f]}\n",
+    file.printf("{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f],\"heading\":[%f,%f,%f]}\n",
                 r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd,
-                a_kp, a_ki, a_kd);
+                a_kp, a_ki, a_kd, h_kp, h_ki, h_kd);
     file.close();
     SPIBus_Unlock();
     return true;
@@ -255,7 +256,8 @@ bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
 bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
                              float &p_kp, float &p_ki, float &p_kd,
                              float &y_kp, float &y_ki, float &y_kd,
-                             float &a_kp, float &a_ki, float &a_kd) {
+                             float &a_kp, float &a_ki, float &a_kd,
+                             float &h_kp, float &h_ki, float &h_kd) {
     if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
         return false;
     }
@@ -276,10 +278,21 @@ bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
     file.close();
     SPIBus_Unlock();
 
-    int parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f]}",
+    int parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f],\"heading\":[%f,%f,%f]}",
+                        &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd,
+                        &y_kp, &y_ki, &y_kd, &a_kp, &a_ki, &a_kd,
+                        &h_kp, &h_ki, &h_kd);
+    if (parsed == 15) {
+        return true;
+    }
+
+    parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f]}",
                         &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd,
                         &y_kp, &y_ki, &y_kd, &a_kp, &a_ki, &a_kd);
     if (parsed == 12) {
+        h_kp = headingerror_kp;
+        h_ki = headingerror_ki;
+        h_kd = headingerror_kd;
         return true;
     }
 
@@ -289,6 +302,9 @@ bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
         a_kp = alt_kp;
         a_ki = alt_ki;
         a_kd = alt_kd;
+        h_kp = headingerror_kp;
+        h_ki = headingerror_ki;
+        h_kd = headingerror_kd;
         return true;
     }
     

@@ -20,6 +20,7 @@ PIDTuningValues g_roll_pid_tuning = {roll_kp, roll_ki, roll_kd};
 PIDTuningValues g_pitch_pid_tuning = {pitch_kp, pitch_ki, pitch_kd};
 PIDTuningValues g_yaw_pid_tuning = {yaw_kp, yaw_ki, yaw_kd};
 PIDTuningValues g_altitude_pid_tuning = {alt_kp, alt_ki, alt_kd};
+PIDTuningValues g_heading_pid_tuning = {headingerror_kp, headingerror_ki, headingerror_kd};
 LoRaPIDCommandPacket g_pending_pid_command = {};
 volatile bool g_pending_pid_command_valid = false;
 LoRaPIDAckPacket g_last_pid_ack = {};
@@ -66,6 +67,11 @@ bool IsValidPIDCommand(const LoRaPIDCommandPacket &packet) {
 
     if ((packet.axis_mask & LORA_PID_AXIS_ALTITUDE) != 0U &&
         !IsPIDTuningFinite(packet.altitude)) {
+        return false;
+    }
+
+    if ((packet.axis_mask & LORA_PID_AXIS_HEADING) != 0U &&
+        !IsPIDTuningFinite(packet.heading)) {
         return false;
     }
 
@@ -209,19 +215,26 @@ void GCS_LoadPIDTuningsFromConfig() {
     SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {pitch_kp, pitch_ki, pitch_kd}, "Pitch");
     SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {yaw_kp, yaw_ki, yaw_kd}, "Yaw");
     SetControllerTuning(altitude_pid, g_altitude_pid_tuning, {alt_kp, alt_ki, alt_kd}, "Altitude");
+    SetControllerTuning(headingerror_pid, g_heading_pid_tuning,
+                        {headingerror_kp, headingerror_ki, headingerror_kd}, "Heading");
 
     if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
         float r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd;
         float a_kp = alt_kp;
         float a_ki = alt_ki;
         float a_kd = alt_kd;
+        float h_kp = headingerror_kp;
+        float h_ki = headingerror_ki;
+        float h_kd = headingerror_kd;
         if (SD_Logger_LoadPIDConfig(r_kp, r_ki, r_kd, p_kp, p_ki, p_kd,
-                                    y_kp, y_ki, y_kd, a_kp, a_ki, a_kd)) {
+                                    y_kp, y_ki, y_kd, a_kp, a_ki, a_kd,
+                                    h_kp, h_ki, h_kd)) {
             Serial.println("Valid pid_config.json found. Applying saved PID values...");
             SetControllerTuning(roll_pid, g_roll_pid_tuning, {r_kp, r_ki, r_kd}, "Roll");
             SetControllerTuning(pitch_pid, g_pitch_pid_tuning, {p_kp, p_ki, p_kd}, "Pitch");
             SetControllerTuning(yaw_pid, g_yaw_pid_tuning, {y_kp, y_ki, y_kd}, "Yaw");
             SetControllerTuning(altitude_pid, g_altitude_pid_tuning, {a_kp, a_ki, a_kd}, "Altitude");
+            SetControllerTuning(headingerror_pid, g_heading_pid_tuning, {h_kp, h_ki, h_kd}, "Heading");
         } else {
             Serial.println("No valid pid_config.json found on SD card. Proceeding with defaults.");
         }
@@ -231,6 +244,7 @@ void GCS_LoadPIDTuningsFromConfig() {
     PrintPIDTuning("Pitch", g_pitch_pid_tuning);
     PrintPIDTuning("Yaw", g_yaw_pid_tuning);
     PrintPIDTuning("Altitude", g_altitude_pid_tuning);
+    PrintPIDTuning("Heading", g_heading_pid_tuning);
 }
 
 void GCS_ProcessIncomingPacket(const uint8_t* buffer, size_t length) {
@@ -297,6 +311,9 @@ void GCS_ApplyPendingCommands() {
         if ((packet.axis_mask & LORA_PID_AXIS_ALTITUDE) != 0U) {
             SetControllerTuning(altitude_pid, g_altitude_pid_tuning, packet.altitude, "Altitude");
         }
+        if ((packet.axis_mask & LORA_PID_AXIS_HEADING) != 0U) {
+            SetControllerTuning(headingerror_pid, g_heading_pid_tuning, packet.heading, "Heading");
+        }
 
         LoRaPIDAckPacket ack = {};
         ack.magic = LORA_PID_PROTOCOL_MAGIC;
@@ -310,25 +327,28 @@ void GCS_ApplyPendingCommands() {
         ack.pitch = g_pitch_pid_tuning;
         ack.yaw = g_yaw_pid_tuning;
         ack.altitude = g_altitude_pid_tuning;
+        ack.heading = g_heading_pid_tuning;
         portEXIT_CRITICAL(&g_tuning_lock);
 
         CacheLastPIDAck(ack);
         SendPIDAck(ack, "applied");
 
         if (SD_LOGGING_ENABLED && SD_Logger_IsReady()) {
-            PIDTuningValues roll_copy, pitch_copy, yaw_copy, altitude_copy;
+            PIDTuningValues roll_copy, pitch_copy, yaw_copy, altitude_copy, heading_copy;
             portENTER_CRITICAL(&g_tuning_lock);
             roll_copy = g_roll_pid_tuning;
             pitch_copy = g_pitch_pid_tuning;
             yaw_copy = g_yaw_pid_tuning;
             altitude_copy = g_altitude_pid_tuning;
+            heading_copy = g_heading_pid_tuning;
             portEXIT_CRITICAL(&g_tuning_lock);
 
             if (SD_Logger_SavePIDConfig(
                     roll_copy.kp, roll_copy.ki, roll_copy.kd,
                     pitch_copy.kp, pitch_copy.ki, pitch_copy.kd,
                     yaw_copy.kp, yaw_copy.ki, yaw_copy.kd,
-                    altitude_copy.kp, altitude_copy.ki, altitude_copy.kd)) {
+                    altitude_copy.kp, altitude_copy.ki, altitude_copy.kd,
+                    heading_copy.kp, heading_copy.ki, heading_copy.kd)) {
                 Serial.println("[SD] Updated PID config saved to pid_config.json");
             } else {
                 Serial.println("[SD] Failed to save PID config to SD card.");
