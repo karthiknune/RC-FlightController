@@ -26,11 +26,11 @@ void mode_alt_hold_init() {
 }
 
 void mode_alt_hold_run(){
-    float actual_roll = imu_data.roll;
+    float actual_roll = -imu_data.roll;
     float actual_pitch = imu_data.pitch;
     
     float des_throttle = get_des_throttle();
-    float des_roll = get_des_roll();
+    float des_roll = get_des_yaw();
     float des_pitch = get_des_pitch();
 
        // only run altitude hold if we have a valid altitude reading and home is set.

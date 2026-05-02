@@ -51,7 +51,7 @@ void PIDController::setTuning(float kp, float ki, float kd) {
     this->kp = kp;
     this->ki = ki;
     this->kd = kd;
-    PIDreset();
+    PIDreset(); //  might not be necessary
     last_output = 0.0f;
 }
 

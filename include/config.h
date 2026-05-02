@@ -77,14 +77,14 @@ constexpr int IMU_TASK_CORE = 1;
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X = -41.17f; //  Ken will have to calibrate these for his own board using the IMU_Run_Mag_Calibration function and update these values accordingly
-constexpr float IMU_MAG_OFFSET_Y = -45.83f;
-constexpr float IMU_MAG_OFFSET_Z = -86.10f;
-constexpr float IMU_MAG_SCALE_X =  1.073f;
-constexpr float IMU_MAG_SCALE_Y =  0.976f;
-constexpr float IMU_MAG_SCALE_Z =  0.959f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
+constexpr float IMU_MAG_OFFSET_X =  14.18f;
+constexpr float IMU_MAG_OFFSET_Y = -13.12f;
+constexpr float IMU_MAG_OFFSET_Z =   7.12f;
+constexpr float IMU_MAG_SCALE_X =  1.079f;
+constexpr float IMU_MAG_SCALE_Y =  1.186f;
+constexpr float IMU_MAG_SCALE_Z =  0.813f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -0.81f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 2.62f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
@@ -205,7 +205,7 @@ constexpr int rudder_int = 1547;
 constexpr float aileron_max_deflection_deg = 30.0f; /// maximum deflection in degrees for aileron
 constexpr float aileron_min_deflection_deg = -30.0f;   // minimum deflection in degrees for aileron
 constexpr float elevator_max_deflection_deg = 15.0f;
-constexpr float elevator_min_deflection_deg = -10.0f; 
+constexpr float elevator_min_deflection_deg = -15.0f; 
 constexpr float rudder_max_deflection_deg = 40.0f;   
 constexpr float rudder_min_deflection_deg = -40.0f; 
 //control surface hardware limits--------------------
@@ -218,7 +218,7 @@ const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 
 ///tuning parameters
-const float roll_kp = 20.0f;
+const float roll_kp = 15.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
 const float max_roll_output = 500.0f;
