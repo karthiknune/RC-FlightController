@@ -186,7 +186,7 @@ float get_des_roll()
 
 float get_des_pitch()
 {
-    float des_pitch = -rx_to_angle(rc_data.elevator_pwm, max_pitch_angle);
+    float des_pitch = rx_to_angle(rc_data.elevator_pwm, max_pitch_angle);
     return des_pitch;
 }
 float get_des_yaw()
