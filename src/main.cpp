@@ -140,7 +140,7 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll = imu_data.roll;
     snapshot.pitch = imu_data.pitch;
     snapshot.yaw = imu_data.yaw;
-    snapshot.des_roll     = get_des_roll();
+    snapshot.des_roll     = get_des_yaw();
     snapshot.des_pitch    = get_des_pitch();
     snapshot.des_yaw      = get_des_yaw();
     snapshot.des_throttle = get_des_throttle();

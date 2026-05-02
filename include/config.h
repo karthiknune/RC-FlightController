@@ -31,7 +31,7 @@ constexpr int LORA_RX_TASK_CORE = 0;
 // LoRa-------------
 
 // SD Card Logger-------------
-constexpr bool SD_LOGGING_ENABLED = false;
+constexpr bool SD_LOGGING_ENABLED = true;
 constexpr int SD_LOG_TASK_PERIOD_MS = 50;       // 20 Hz logging
 constexpr int SD_LOG_TASK_STACK_SIZE = 4096;
 constexpr int SD_LOG_TASK_PRIORITY = 1;
@@ -69,7 +69,7 @@ constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
@@ -77,15 +77,15 @@ constexpr int IMU_TASK_CORE = 1;
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X =  -9.45f; //  change these values based on your magnetometer calibration results
-constexpr float IMU_MAG_OFFSET_Y =  -8.25f;
-constexpr float IMU_MAG_OFFSET_Z = -25.50f;
-constexpr float IMU_MAG_SCALE_X =  1.042f;
-constexpr float IMU_MAG_SCALE_Y =  0.929f;
-constexpr float IMU_MAG_SCALE_Z =  1.037f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -1.61f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -3.75f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
+constexpr float IMU_MAG_OFFSET_X =  14.18f;
+constexpr float IMU_MAG_OFFSET_Y = -13.12f;
+constexpr float IMU_MAG_OFFSET_Z =   7.12f;
+constexpr float IMU_MAG_SCALE_X =  1.079f;
+constexpr float IMU_MAG_SCALE_Y =  1.186f;
+constexpr float IMU_MAG_SCALE_Z =  0.813f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -0.81f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 2.62f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
 // IMU_RUN_STARTUP_LEVEL_CALIBRATION false.
@@ -205,7 +205,7 @@ constexpr int rudder_int = 1547;
 constexpr float aileron_max_deflection_deg = 30.0f; /// maximum deflection in degrees for aileron
 constexpr float aileron_min_deflection_deg = -30.0f;   // minimum deflection in degrees for aileron
 constexpr float elevator_max_deflection_deg = 15.0f;
-constexpr float elevator_min_deflection_deg = -10.0f; 
+constexpr float elevator_min_deflection_deg = -15.0f; 
 constexpr float rudder_max_deflection_deg = 40.0f;   
 constexpr float rudder_min_deflection_deg = -40.0f; 
 //control surface hardware limits--------------------
@@ -218,7 +218,7 @@ const float max_pitch_angle = 15.0f;
 const float max_yaw_angle = 30.0f;
 
 ///tuning parameters
-const float roll_kp = 20.0f;
+const float roll_kp = 15.0f;
 const float roll_ki = 0.0f;
 const float roll_kd = 0.1f;
 const float max_roll_output = 500.0f;
