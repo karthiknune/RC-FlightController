@@ -86,8 +86,8 @@ constexpr float IMU_MAG_SENSOR_ALIGN_X_SIGN = 1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = 1.0f;
 constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = 1.0f;
 // Level calibration offsets output by the BNO085 Calibration Utility
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.37f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -2.35f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG =  -2.95f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG =  -0.27f;
 
 // --- DEPRECATED ICM-20948 SETTINGS (SAFE TO DELETE) ---
 // The following settings were used by the old ICM-20948 software filter.
