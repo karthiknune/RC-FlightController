@@ -111,6 +111,7 @@ struct telemetrydata{
     float roll_pid_out;
     float pitch_pid_out;
     float yaw_pid_out;
+    float alt_pid_out;
     // Active PID tuning gains
     float roll_pid_kp;
     float roll_pid_ki;

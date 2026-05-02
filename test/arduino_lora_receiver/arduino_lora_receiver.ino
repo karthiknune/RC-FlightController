@@ -1,7 +1,8 @@
 // pid roll  <kp> <ki> <kd>
 // pid pitch <kp> <ki> <kd>
 // pid yaw   <kp> <ki> <kd>
-// pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd>
+// pid altitude <kp> <ki> <kd>
+// pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd> [<akp> <aki> <akd>]
 // show pid
 // cancel
 // help
@@ -39,8 +40,11 @@ constexpr uint32_t LORA_PID_PROTOCOL_MAGIC = 0x52434643UL;
 constexpr uint8_t LORA_PID_AXIS_ROLL  = 1U << 0;
 constexpr uint8_t LORA_PID_AXIS_PITCH = 1U << 1;
 constexpr uint8_t LORA_PID_AXIS_YAW   = 1U << 2;
-constexpr uint8_t LORA_PID_AXIS_ALL =
+constexpr uint8_t LORA_PID_AXIS_ALTITUDE = 1U << 3;
+constexpr uint8_t LORA_PID_AXIS_ATTITUDE =
     LORA_PID_AXIS_ROLL | LORA_PID_AXIS_PITCH | LORA_PID_AXIS_YAW;
+constexpr uint8_t LORA_PID_AXIS_ALL =
+    LORA_PID_AXIS_ATTITUDE | LORA_PID_AXIS_ALTITUDE;
 
 enum class LoRaMessageType : uint8_t {
   PIDCommand = 1,
@@ -61,6 +65,7 @@ struct LoRaPIDCommandPacket {
   PIDTuningValues roll;
   PIDTuningValues pitch;
   PIDTuningValues yaw;
+  PIDTuningValues altitude;
 };
 
 struct LoRaPIDAckPacket {
@@ -72,6 +77,7 @@ struct LoRaPIDAckPacket {
   PIDTuningValues roll;
   PIDTuningValues pitch;
   PIDTuningValues yaw;
+  PIDTuningValues altitude;
 };
 
 struct TelemetryPacket {
@@ -115,6 +121,7 @@ struct TelemetryPacket {
   float roll_pid_out;
   float pitch_pid_out;
   float yaw_pid_out;
+  float alt_pid_out;
   float roll_pid_kp;
   float roll_pid_ki;
   float roll_pid_kd;
@@ -144,9 +151,9 @@ struct PendingPIDCommandState {
   unsigned long last_send_ms;
 };
 
-static_assert(sizeof(LoRaPIDCommandPacket) == 44, "PID command packet size mismatch");
-static_assert(sizeof(LoRaPIDAckPacket) == 44, "PID ack packet size mismatch");
-static_assert(sizeof(TelemetryPacket) == 228, "Telemetry packet size mismatch");
+static_assert(sizeof(LoRaPIDCommandPacket) == 56, "PID command packet size mismatch");
+static_assert(sizeof(LoRaPIDAckPacket) == 56, "PID ack packet size mismatch");
+static_assert(sizeof(TelemetryPacket) == 232, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
 uint8_t g_next_pid_sequence = 1U;
@@ -156,6 +163,7 @@ PendingPIDCommandState g_pending_pid_command = {};
 PIDTuningValues g_last_roll_pid = {};
 PIDTuningValues g_last_pitch_pid = {};
 PIDTuningValues g_last_yaw_pid = {};
+PIDTuningValues g_last_altitude_pid = {};
 bool g_have_remote_pid_state = false;
 
 void PrintPIDTuning(const char *label, const PIDTuningValues &tuning) {
@@ -171,7 +179,8 @@ void PrintPIDHelp() {
   Serial.println("  pid roll  <kp> <ki> <kd>");
   Serial.println("  pid pitch <kp> <ki> <kd>");
   Serial.println("  pid yaw   <kp> <ki> <kd>");
-  Serial.println("  pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd>");
+  Serial.println("  pid altitude <kp> <ki> <kd>");
+  Serial.println("  pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd> [<akp> <aki> <akd>]");
   Serial.println("  show pid");
   Serial.println("  cancel");
   Serial.println("  help");
@@ -216,10 +225,11 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
       packet.des_yaw);
 
   Serial.printf(
-      "Control   thr=%.2f  des_thr=%.2f  airspeed=%.2f\n",
+      "Control   thr=%.2f  des_thr=%.2f  airspeed=%.2f  alt_pid=%.2f\n",
       packet.throttle,
       packet.des_throttle,
-      packet.airspeed);
+      packet.airspeed,
+      packet.alt_pid_out);
 
   Serial.printf(
       "Altitude  alt=%.2f  baro=%.2f  target=%.2f\n",
@@ -277,6 +287,7 @@ void PrintLastKnownPIDState() {
   PrintPIDTuning("Roll ", g_last_roll_pid);
   PrintPIDTuning("Pitch", g_last_pitch_pid);
   PrintPIDTuning("Yaw  ", g_last_yaw_pid);
+  PrintPIDTuning("Alt  ", g_last_altitude_pid);
 }
 
 bool SendLoRaPacket(const uint8_t *data, size_t length) {
@@ -309,7 +320,8 @@ void QueuePIDCommand(const LoRaPIDCommandPacket &packet) {
 void QueueAxisPIDCommand(uint8_t axis_mask,
                          const PIDTuningValues &roll,
                          const PIDTuningValues &pitch,
-                         const PIDTuningValues &yaw) {
+                         const PIDTuningValues &yaw,
+                         const PIDTuningValues &altitude) {
   LoRaPIDCommandPacket packet = {};
   packet.magic = LORA_PID_PROTOCOL_MAGIC;
   packet.type = static_cast<uint8_t>(LoRaMessageType::PIDCommand);
@@ -318,6 +330,7 @@ void QueueAxisPIDCommand(uint8_t axis_mask,
   packet.roll = roll;
   packet.pitch = pitch;
   packet.yaw = yaw;
+  packet.altitude = altitude;
   QueuePIDCommand(packet);
 }
 
@@ -331,6 +344,7 @@ void HandlePIDAck(const LoRaPIDAckPacket &packet, int rssi, float snr) {
   g_last_roll_pid = packet.roll;
   g_last_pitch_pid = packet.pitch;
   g_last_yaw_pid = packet.yaw;
+  g_last_altitude_pid = packet.altitude;
   g_have_remote_pid_state = true;
 
   Serial.printf("[ACK] seq=%u status=%u mask=0x%02X RSSI=%d SNR=%.1f\n",
@@ -421,10 +435,11 @@ void HandleSerialCommand(char *line) {
     return;
   }
 
-  float values[9] = {};
+  float values[12] = {};
   if (sscanf(line, "pid roll %f %f %f", &values[0], &values[1], &values[2]) == 3) {
     QueueAxisPIDCommand(LORA_PID_AXIS_ROLL,
                         {values[0], values[1], values[2]},
+                        {},
                         {},
                         {});
     return;
@@ -434,6 +449,7 @@ void HandleSerialCommand(char *line) {
     QueueAxisPIDCommand(LORA_PID_AXIS_PITCH,
                         {},
                         {values[0], values[1], values[2]},
+                        {},
                         {});
     return;
   }
@@ -442,7 +458,32 @@ void HandleSerialCommand(char *line) {
     QueueAxisPIDCommand(LORA_PID_AXIS_YAW,
                         {},
                         {},
+                        {values[0], values[1], values[2]},
+                        {});
+    return;
+  }
+
+  if (sscanf(line, "pid altitude %f %f %f", &values[0], &values[1], &values[2]) == 3 ||
+      sscanf(line, "pid alt %f %f %f", &values[0], &values[1], &values[2]) == 3) {
+    QueueAxisPIDCommand(LORA_PID_AXIS_ALTITUDE,
+                        {},
+                        {},
+                        {},
                         {values[0], values[1], values[2]});
+    return;
+  }
+
+  if (sscanf(line,
+             "pid all %f %f %f %f %f %f %f %f %f %f %f %f",
+             &values[0], &values[1], &values[2],
+             &values[3], &values[4], &values[5],
+             &values[6], &values[7], &values[8],
+             &values[9], &values[10], &values[11]) == 12) {
+    QueueAxisPIDCommand(LORA_PID_AXIS_ALL,
+                        {values[0], values[1], values[2]},
+                        {values[3], values[4], values[5]},
+                        {values[6], values[7], values[8]},
+                        {values[9], values[10], values[11]});
     return;
   }
 
@@ -451,10 +492,11 @@ void HandleSerialCommand(char *line) {
              &values[0], &values[1], &values[2],
              &values[3], &values[4], &values[5],
              &values[6], &values[7], &values[8]) == 9) {
-    QueueAxisPIDCommand(LORA_PID_AXIS_ALL,
+    QueueAxisPIDCommand(LORA_PID_AXIS_ATTITUDE,
                         {values[0], values[1], values[2]},
                         {values[3], values[4], values[5]},
-                        {values[6], values[7], values[8]});
+                        {values[6], values[7], values[8]},
+                        {});
     return;
   }
 

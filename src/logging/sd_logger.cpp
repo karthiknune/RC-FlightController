@@ -227,7 +227,8 @@ bool SD_Logger_IsReady() {
 
 bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
                              float p_kp, float p_ki, float p_kd,
-                             float y_kp, float y_ki, float y_kd) {
+                             float y_kp, float y_ki, float y_kd,
+                             float a_kp, float a_ki, float a_kd) {
     if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
         return false;
     }
@@ -243,8 +244,9 @@ bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
         return false;
     }
 
-    file.printf("{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f]}\n",
-                r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd);
+    file.printf("{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f]}\n",
+                r_kp, r_ki, r_kd, p_kp, p_ki, p_kd, y_kp, y_ki, y_kd,
+                a_kp, a_ki, a_kd);
     file.close();
     SPIBus_Unlock();
     return true;
@@ -252,7 +254,8 @@ bool SD_Logger_SavePIDConfig(float r_kp, float r_ki, float r_kd,
 
 bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
                              float &p_kp, float &p_ki, float &p_kd,
-                             float &y_kp, float &y_ki, float &y_kd) {
+                             float &y_kp, float &y_ki, float &y_kd,
+                             float &a_kp, float &a_ki, float &a_kd) {
     if (!g_sd_card_ready || !SPIBus_Lock(pdMS_TO_TICKS(SPI_BUS_LOCK_TIMEOUT_MS))) {
         return false;
     }
@@ -273,8 +276,21 @@ bool SD_Logger_LoadPIDConfig(float &r_kp, float &r_ki, float &r_kd,
     file.close();
     SPIBus_Unlock();
 
-    int parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f]}",
-                        &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd, &y_kp, &y_ki, &y_kd);
+    int parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f],\"altitude\":[%f,%f,%f]}",
+                        &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd,
+                        &y_kp, &y_ki, &y_kd, &a_kp, &a_ki, &a_kd);
+    if (parsed == 12) {
+        return true;
+    }
+
+    parsed = sscanf(content.c_str(), "{\"roll\":[%f,%f,%f],\"pitch\":[%f,%f,%f],\"yaw\":[%f,%f,%f]}",
+                    &r_kp, &r_ki, &r_kd, &p_kp, &p_ki, &p_kd, &y_kp, &y_ki, &y_kd);
+    if (parsed == 9) {
+        a_kp = alt_kp;
+        a_ki = alt_ki;
+        a_kd = alt_kd;
+        return true;
+    }
     
-    return (parsed == 9);
+    return false;
 }
