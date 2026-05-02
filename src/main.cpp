@@ -88,7 +88,7 @@ FlightMode DetermineFlightMode() {
     if (flight_mode_pwm <= FLIGHT_MODE_PWM_ALT_HOLD_MAX) {
         return FlightMode::AltHold;
     }
-    return FlightMode::Glide;
+    return FlightMode::Waypoint;
 }
 
 void InitializeFlightMode(FlightMode mode) {
@@ -144,8 +144,15 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.des_pitch    = get_des_pitch();
     snapshot.des_yaw      = get_des_yaw();
     snapshot.des_throttle = get_des_throttle();
-    snapshot.altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
-    snapshot.des_altitude = navigation.get_target_altitude();
+    if ((baro_data.healthy || gps_data.lock_acquired) && home_is_set()) {
+        const float actual_alt_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
+        snapshot.altitude = calc_AGL(actual_alt_msl);
+    } else {
+        snapshot.altitude = -1.0f;
+    }
+    snapshot.des_altitude = active_flight_mode == FlightMode::AltHold
+        ? target_alt_agl
+        : navigation.get_target_altitude();
     snapshot.airspeed = airspeed_data.healthy ? airspeed_data.airspeed_mps : 0.0f;
     snapshot.gps_lat = static_cast<float>(gps_data.latitude);
     snapshot.gps_long = static_cast<float>(gps_data.longitude);
