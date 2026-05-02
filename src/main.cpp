@@ -7,6 +7,7 @@
 #include "flight/flightmodes.h"
 #include "flight/motormixer.h"
 #include "hal/sensors/bno085.h"
+// #include "hal/sensors/imu.h"
 #include "hal/sensors/baro.h"
 #include "hal/sensors/sensor_bus.h"
 #include "hal/sensors/gps.h"
@@ -267,8 +268,7 @@ void TaskFlightControl(void *pvParameters) {
         }
 
         // Force flight mode re-init on the first tick after arming.
-        if (!prev_armed)
-        {
+        if (!prev_armed) {
             arm_start_ms = millis();
             arm_tare_pending = true;
             last_countdown_sec = -1;
@@ -277,22 +277,18 @@ void TaskFlightControl(void *pvParameters) {
         }
         prev_armed = true;
 
-        if (arm_tare_pending)
-        {
+        if (arm_tare_pending) {
             uint32_t elapsed = millis() - arm_start_ms;
             int sec_left = 5 - (elapsed / 1000);
 
-            if (sec_left != last_countdown_sec)
-            {
+            if (sec_left != last_countdown_sec) {
                 last_countdown_sec = sec_left;
-                if (sec_left > 0)
-                {
+                if (sec_left > 0) {
                     Serial.printf("  Yaw tare in %ds...\n", sec_left);
                 }
             }
 
-            if (elapsed >= 5000)
-            {
+            if (elapsed >= 5000) {
                 BNO085_TareYaw();
                 Serial.println("\n*** YAW SNAPPED TO 0 DEGREES ***\n");
                 arm_tare_pending = false;
@@ -403,6 +399,7 @@ void setup() {
     rx_init();
     arming_init();
     BNO085_Init();
+    // RunStartupInit calibrations for icm
     Barometer_Init();
     Airspeed_Init();
     GPS_Init();
