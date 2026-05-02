@@ -140,7 +140,7 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll = imu_data.roll;
     snapshot.pitch = imu_data.pitch;
     snapshot.yaw = imu_data.yaw;
-    snapshot.des_roll     = get_des_yaw();
+    snapshot.des_roll     = get_des_yaw();  //  intentionally swapped due to absence of ailerons
     snapshot.des_pitch    = get_des_pitch();
     snapshot.des_yaw      = get_des_yaw();
     snapshot.des_throttle = get_des_throttle();
@@ -175,6 +175,8 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.roll_pid_out  = roll_pid.getLastOutput();
     snapshot.pitch_pid_out = pitch_pid.getLastOutput();
     snapshot.yaw_pid_out   = yaw_pid.getLastOutput();
+    snapshot.alt_pid_out   = altitude_pid.getLastOutput();
+
 
     GCS_PopulateTelemetryTuning(snapshot);
 
