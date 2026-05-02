@@ -203,7 +203,8 @@ function useGCSData() {
     roll:  [D?.roll_pid_kp, D?.roll_pid_ki, D?.roll_pid_kd],
     pitch: [D?.pitch_pid_kp, D?.pitch_pid_ki, D?.pitch_pid_kd],
     yaw:   [D?.yaw_pid_kp, D?.yaw_pid_ki, D?.yaw_pid_kd],
-    altitude: [D?.altitude_pid_kp, D?.altitude_pid_ki, D?.altitude_pid_kd]
+    altitude: [D?.altitude_pid_kp, D?.altitude_pid_ki, D?.altitude_pid_kd],
+    heading: [D?.headingerror_pid_kp, D?.headingerror_pid_ki, D?.headingerror_pid_kd]
   };
 
   return {
@@ -971,6 +972,7 @@ function App() {
             <PidRow label="Pitch" vals={tm.pid.pitch} />
             <PidRow label="Yaw"   vals={tm.pid.yaw}   />
             <PidRow label="Altitude" vals={tm.pid.altitude} />
+            <PidRow label="Heading" vals={tm.pid.heading} />
             <CommandTerminal sendCommand={tm.sendCommand} cmdLog={tm.cmdLog} />
           </Card>
           <Card>
