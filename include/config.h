@@ -69,7 +69,9 @@ constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+// --- ACTIVE BNO085 / SYSTEM IMU SETTINGS ---
+// These settings are actively used by the BNO085 driver and the main flight controller tasks.
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
@@ -77,14 +79,14 @@ constexpr int IMU_TASK_CORE = 1;
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
 constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X =  14.18f; //  these values are from calibration done with electronics inside the airframe
-constexpr float IMU_MAG_OFFSET_Y = -13.12f;
-constexpr float IMU_MAG_OFFSET_Z =   7.12f;
-constexpr float IMU_MAG_SCALE_X =  1.079f;
-constexpr float IMU_MAG_SCALE_Y =  1.186f;
-constexpr float IMU_MAG_SCALE_Z =  0.813f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -0.81f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 2.62f;
+constexpr float IMU_MAG_OFFSET_X = -41.17f; //  Ken will have to calibrate these for his own board using the IMU_Run_Mag_Calibration function and update these values accordingly
+constexpr float IMU_MAG_OFFSET_Y = -45.83f;
+constexpr float IMU_MAG_OFFSET_Z = -86.10f;
+constexpr float IMU_MAG_SCALE_X =  1.073f;
+constexpr float IMU_MAG_SCALE_Y =  0.976f;
+constexpr float IMU_MAG_SCALE_Z =  0.959f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.0f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 0.0f;
 constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
@@ -134,7 +136,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
+constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500; //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
 constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1850;
 constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 2000;
 constexpr int BARO_TASK_PERIOD_MS = 50;

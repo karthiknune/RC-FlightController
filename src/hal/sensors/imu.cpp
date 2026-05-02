@@ -18,6 +18,9 @@ namespace
 
     constexpr uint8_t kIMUAddress = ICM20948_I2CADDR_DEFAULT;
     constexpr float kRadToDeg = 57.2957795f;
+    constexpr float kDegToRad = PI / 180.0f;
+    constexpr float kMinMagAxisSpanUt = 25.0f;
+
     constexpr float kDegToRad = 0.0174532925f;
 
     // Mahony Filter Tuning
@@ -41,13 +44,68 @@ namespace
     float g_gyro_bias_x_dps = 0.0f;
     float g_gyro_bias_y_dps = 0.0f;
     float g_gyro_bias_z_dps = 0.0f;
+    float g_yaw_fusion_bias_dps = 0.0f;
+    bool g_mag_heading_seeded = false;
+    float g_mag_heading_cos = 1.0f;
+    float g_mag_heading_sin = 0.0f;
 
-    bool ProbeIMULocked() {
+    struct Vec3
+    {
+        float x;
+        float y;
+        float z;
+    };
+
+    float WrapDegrees(float angle_deg)
+    {
+        return math::wrap_heading_error(angle_deg);
+    }
+
+    Vec3 MakeVec3(float x, float y, float z)
+    {
+        return {x, y, z};
+    }
+
+    float Dot(const Vec3 &a, const Vec3 &b)
+    {
+        return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    }
+
+    Vec3 Cross(const Vec3 &a, const Vec3 &b)
+    {
+        return {
+            (a.y * b.z) - (a.z * b.y),
+            (a.z * b.x) - (a.x * b.z),
+            (a.x * b.y) - (a.y * b.x)};
+    }
+
+    float Norm(const Vec3 &v)
+    {
+        return sqrtf(Dot(v, v));
+    }
+
+    bool Normalize(Vec3 &v)
+    {
+        const float magnitude = Norm(v);
+        if (magnitude <= 1.0e-6f)
+        {
+            return false;
+        }
+
+        v.x /= magnitude;
+        v.y /= magnitude;
+        v.z /= magnitude;
+        return true;
+    }
+
+    bool ProbeIMULocked()
+    {
         Wire.beginTransmission(kIMUAddress);
         return Wire.endTransmission(true) == 0;
     }
 
-    void ResetOrientationState() {
+    void ResetOrientationState()
+    {
         g_last_time_us = 0;
         g_orientation_seeded = false;
         q0 = 1.0f; q1 = 0.0f; q2 = 0.0f; q3 = 0.0f;
@@ -84,6 +142,55 @@ namespace
         return value * axis_sign;
     }
 
+    float ComputeAccelCorrectionGain(const IMUData_raw &data)
+    {
+        const float accel_norm = sqrtf((data.accel_x * data.accel_x) +
+                                       (data.accel_y * data.accel_y) +
+                                       (data.accel_z * data.accel_z));
+        const float accel_error = fabsf(accel_norm - IMU_ACCEL_1G_MPS2);
+
+        if (accel_error >= IMU_ACCEL_TRUST_ERROR_MPS2)
+        {
+            return IMU_ACCEL_MIN_TRUST;
+        }
+
+        const float normalized_error = accel_error / IMU_ACCEL_TRUST_ERROR_MPS2;
+        const float trust = 1.0f - normalized_error;
+        return IMU_ACCEL_MIN_TRUST + ((1.0f - IMU_ACCEL_MIN_TRUST) * trust);
+    }
+
+    float ComputeMagCorrectionGain(const IMUData_raw &data, float horizontal_ratio)
+    {
+        const float mag_norm = sqrtf((data.mag_x * data.mag_x) +
+                                     (data.mag_y * data.mag_y) +
+                                     (data.mag_z * data.mag_z));
+        if (mag_norm < 1.0f)
+        {
+            return IMU_MAG_MIN_TRUST;
+        }
+
+        if (horizontal_ratio <= IMU_MAG_MIN_HORIZONTAL_RATIO)
+        {
+            return IMU_MAG_MIN_TRUST;
+        }
+
+        const float normalized_ratio =
+            (horizontal_ratio - IMU_MAG_MIN_HORIZONTAL_RATIO) /
+            (1.0f - IMU_MAG_MIN_HORIZONTAL_RATIO);
+        const float clamped_ratio = math::clamp_value(normalized_ratio, 0.0f, 1.0f);
+        return IMU_MAG_MIN_TRUST + ((1.0f - IMU_MAG_MIN_TRUST) * clamped_ratio);
+    }
+
+    void AlignMagnetometerToIMUFrame(const sensors_event_t &m,
+                                     float &aligned_x,
+                                     float &aligned_y,
+                                     float &aligned_z)
+    {
+        aligned_x = m.magnetic.x * IMU_MAG_SENSOR_ALIGN_X_SIGN;
+        aligned_y = m.magnetic.y * IMU_MAG_SENSOR_ALIGN_Y_SIGN;
+        aligned_z = m.magnetic.z * IMU_MAG_SENSOR_ALIGN_Z_SIGN;
+    }
+
     void PopulateIMUData(const sensors_event_t &a,
                          const sensors_event_t &g,
                          const sensors_event_t &m,
@@ -111,7 +218,8 @@ namespace
         data.mag_z = ApplyBodyFrameAxis((aligned_mag_z - IMU_MAG_OFFSET_Z) * IMU_MAG_SCALE_Z, IMU_BODY_FRAME_Z_SIGN);
     }
 
-    void UpdateOrientation(IMUData_raw &data) {
+    void UpdateOrientation(IMUData_raw &data)
+    {
         const uint32_t now_us = micros();
         float dt = 0.0f;
         if (g_last_time_us != 0) {
@@ -226,9 +334,12 @@ namespace
         data.yaw = math::wrap_heading_error(g_yaw_deg);
     }
 
-    void UpdateIMUAvailability(bool available) {
-        if (available) {
-            if (!g_imu_ready && SENSOR_STATUS_LOGGING_ENABLED) {
+    void UpdateIMUAvailability(bool available)
+    {
+        if (available)
+        {
+            if (!g_imu_ready && SENSOR_STATUS_LOGGING_ENABLED)
+            {
                 Serial.println("ICM-20948 available.");
             }
             g_imu_ready = true;
@@ -236,7 +347,8 @@ namespace
             return;
         }
 
-        if ((g_imu_ready || !g_imu_missing_logged) && SENSOR_STATUS_LOGGING_ENABLED) {
+        if ((g_imu_ready || !g_imu_missing_logged) && SENSOR_STATUS_LOGGING_ENABLED)
+        {
             Serial.println("ICM-20948 unavailable. Continuing without IMU data.");
         }
 
@@ -257,30 +369,35 @@ namespace
         return true;
     }
 
-    bool TryInitializeIMU() {
+    bool TryInitializeIMU()
+    {
         const uint32_t now_ms = millis();
         if (g_last_init_attempt_ms != 0 && (now_ms - g_last_init_attempt_ms) < SENSOR_RECONNECT_INTERVAL_MS) {
             return g_imu_ready;
         }
         g_last_init_attempt_ms = now_ms;
 
-        if (!SensorBus_Init()) {
+        if (!SensorBus_Init())
+        {
             UpdateIMUAvailability(false);
             return false;
         }
 
         bool begin_ok = false;
-        if (SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS))) {
+        if (SensorBus_Lock(pdMS_TO_TICKS(SENSOR_I2C_LOCK_TIMEOUT_MS)))
+        {
             begin_ok = icm.begin_I2C(kIMUAddress, &Wire);
-            if (begin_ok) {
-                icm.setAccelRange(ICM20948_ACCEL_RANGE_8_G);    
-                icm.setGyroRange(ICM20948_GYRO_RANGE_500_DPS);  
-                icm.setMagDataRate(AK09916_MAG_DATARATE_50_HZ); 
+            if (begin_ok)
+            {
+                icm.setAccelRange(ICM20948_ACCEL_RANGE_8_G);
+                icm.setGyroRange(ICM20948_GYRO_RANGE_500_DPS);
+                icm.setMagDataRate(AK09916_MAG_DATARATE_50_HZ);
             }
             SensorBus_Unlock();
         }
 
-        if (!begin_ok) {
+        if (!begin_ok)
+        {
             UpdateIMUAvailability(false);
             return false;
         }
@@ -293,7 +410,8 @@ namespace
 
 } // namespace
 
-void IMU_Init() {
+void IMU_Init()
+{
     (void)TryInitializeIMU();
 }
 
@@ -342,7 +460,8 @@ bool IMU_Run_Level_Calibration(float &roll_offset_deg, float &pitch_offset_deg) 
     for (int sample_index = 0; sample_index < IMU_LEVEL_CALIBRATION_SAMPLES; ++sample_index) {
         IMUData_raw sample = {};
         IMU_Read(sample);
-        if (!sample.healthy) {
+        if (!sample.healthy)
+        {
             delay(IMU_LEVEL_CALIBRATION_SAMPLE_DELAY_MS);
             continue;
         }
@@ -380,7 +499,8 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     scale_y = 1.0f;
     scale_z = 1.0f;
 
-    if (!g_imu_ready && !TryInitializeIMU()) {
+    if (!g_imu_ready && !TryInitializeIMU())
+    {
         return false;
     }
 
@@ -389,8 +509,10 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     Serial.println("   MAGNETOMETER CALIBRATION MODE        ");
     Serial.println("========================================");
     Serial.println("Rotate and tumble the aircraft in ALL directions (figure 8).");
+    Serial.println("Try to expose every axis to both + and - directions.");
 
-    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining) {
+    for (int seconds_remaining = 5; seconds_remaining > 0; --seconds_remaining)
+    {
         Serial.printf("Starting in %d...\n", seconds_remaining);
         delay(1000);
     }
@@ -401,44 +523,54 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
 
     int captured_samples = 0;
     constexpr int kMagCalibrationSamples = 1500;
-    constexpr int kMagSampleDelayMs = 20; 
+    constexpr int kMagSampleDelayMs = 20;
 
     Serial.println("Recording samples... Keep tumbling!");
-    for (int sample_index = 0; sample_index < kMagCalibrationSamples; ++sample_index) {
+    for (int sample_index = 0; sample_index < kMagCalibrationSamples; ++sample_index)
+    {
         sensors_event_t a = {};
         sensors_event_t g = {};
         sensors_event_t temp = {};
         sensors_event_t m = {};
 
-        if (!ReadIMUEvents(a, g, temp, m)) {
+        if (!ReadIMUEvents(a, g, temp, m))
+        {
             delay(kMagSampleDelayMs);
             continue;
         }
 
-        if (m.magnetic.x != 0.0f || m.magnetic.y != 0.0f || m.magnetic.z != 0.0f) {
-            if (m.magnetic.x < min_x)
-                min_x = m.magnetic.x;
-            if (m.magnetic.x > max_x)
-                max_x = m.magnetic.x;
-            if (m.magnetic.y < min_y)
-                min_y = m.magnetic.y;
-            if (m.magnetic.y > max_y)
-                max_y = m.magnetic.y;
-            if (m.magnetic.z < min_z)
-                min_z = m.magnetic.z;
-            if (m.magnetic.z > max_z)
-                max_z = m.magnetic.z;
+        if (m.magnetic.x != 0.0f || m.magnetic.y != 0.0f || m.magnetic.z != 0.0f)
+        {
+            float aligned_mag_x = 0.0f;
+            float aligned_mag_y = 0.0f;
+            float aligned_mag_z = 0.0f;
+            AlignMagnetometerToIMUFrame(m, aligned_mag_x, aligned_mag_y, aligned_mag_z);
+
+            if (aligned_mag_x < min_x)
+                min_x = aligned_mag_x;
+            if (aligned_mag_x > max_x)
+                max_x = aligned_mag_x;
+            if (aligned_mag_y < min_y)
+                min_y = aligned_mag_y;
+            if (aligned_mag_y > max_y)
+                max_y = aligned_mag_y;
+            if (aligned_mag_z < min_z)
+                min_z = aligned_mag_z;
+            if (aligned_mag_z > max_z)
+                max_z = aligned_mag_z;
             ++captured_samples;
         }
 
-        if ((sample_index + 1) % 50 == 0) {
+        if ((sample_index + 1) % 50 == 0)
+        {
             Serial.print("#");
         }
 
         delay(kMagSampleDelayMs);
     }
 
-    if (captured_samples == 0) {
+    if (captured_samples == 0)
+    {
         Serial.println("\nMag calibration failed: no valid samples captured.");
         return false;
     }
@@ -450,6 +582,9 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     const float radius_x = (max_x - min_x) / 2.0f;
     const float radius_y = (max_y - min_y) / 2.0f;
     const float radius_z = (max_z - min_z) / 2.0f;
+    const float span_x = max_x - min_x;
+    const float span_y = max_y - min_y;
+    const float span_z = max_z - min_z;
     const float avg_radius = (radius_x + radius_y + radius_z) / 3.0f;
 
     if (radius_x > 0.0f)
@@ -459,9 +594,20 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     if (radius_z > 0.0f)
         scale_z = avg_radius / radius_z;
 
+    const bool poor_x_coverage = span_x < kMinMagAxisSpanUt;
+    const bool poor_y_coverage = span_y < kMinMagAxisSpanUt;
+    const bool poor_z_coverage = span_z < kMinMagAxisSpanUt;
+
     Serial.println("\n\n--- CALIBRATION RESULTS ---");
+    Serial.printf("Samples captured  : %d\n", captured_samples);
+    Serial.printf("Axis span [uT]    : X: %6.2f | Y: %6.2f | Z: %6.2f\n", span_x, span_y, span_z);
     Serial.printf("Hard-Iron Offsets : X: %6.2f | Y: %6.2f | Z: %6.2f\n", offset_x, offset_y, offset_z);
     Serial.printf("Soft-Iron Scales  : X: %6.2f | Y: %6.2f | Z: %6.2f\n", scale_x, scale_y, scale_z);
+    if (poor_x_coverage || poor_y_coverage || poor_z_coverage)
+    {
+        Serial.println("WARNING: magnetometer coverage looks weak on at least one axis.");
+        Serial.println("Re-run calibration with larger rotations before trusting these values.");
+    }
     Serial.println("---------------------------");
     Serial.println("Copy these values into include/config.h:");
     Serial.printf("constexpr float IMU_MAG_OFFSET_X = %6.2ff;\n", offset_x);
@@ -470,13 +616,18 @@ bool IMU_Run_Mag_Calibration(float &offset_x, float &offset_y, float &offset_z,
     Serial.printf("constexpr float IMU_MAG_SCALE_X = %6.3ff;\n", scale_x);
     Serial.printf("constexpr float IMU_MAG_SCALE_Y = %6.3ff;\n", scale_y);
     Serial.printf("constexpr float IMU_MAG_SCALE_Z = %6.3ff;\n", scale_z);
+    Serial.println("After copying them into include/config.h, set IMU_RUN_MAG_CALIBRATION back to false.");
+    Serial.println("These values feed the production IMU estimator in src/hal/sensors/imu.cpp");
+    Serial.println("and therefore the attitude printed in test/main.cpp and used by the flight stack.");
     Serial.println("========================================\n");
 
     return true;
 }
 
-void IMU_Read(IMUData_raw &data) {
-    if (!g_imu_ready && !TryInitializeIMU()) {
+void IMU_Read(IMUData_raw &data)
+{
+    if (!g_imu_ready && !TryInitializeIMU())
+    {
         data.healthy = false;
         return;
     }
