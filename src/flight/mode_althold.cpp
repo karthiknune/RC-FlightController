@@ -27,7 +27,7 @@ void mode_alt_hold_init() {
 }
 
 void mode_alt_hold_run(){
-    float actual_roll = -imu_data.roll;
+    float actual_roll = imu_data.roll;
     float actual_pitch = imu_data.pitch;
     
     float des_throttle = get_des_throttle();
