@@ -76,12 +76,12 @@ constexpr int IMU_TASK_CORE = 1;
 // Aircraft installation used in current tests:
 // IMU X arrow -> tail, IMU Y arrow -> left, IMU Z arrow -> up.
 constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f; // Map physical X (Tail) to FRD Forward
-constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f; // Map physical Y (Left) to FRD Right
+constexpr float IMU_BODY_FRAME_Y_SIGN = 1.0f;  // Map physical Y (Left) to FRD Right
 constexpr float IMU_BODY_FRAME_Z_SIGN = -1.0f; // Map physical Z (Up) to FRD Down
 // Magnetometer die alignment relative to the accel/gyro frame.
 constexpr float IMU_MAG_SENSOR_ALIGN_X_SIGN = 1.0f;
-constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = -1.0f;
-constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = -1.0f;
+constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = 1.0f;
+constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = 1.0f;
 // Replace these with the latest values printed by IMU_Run_Level_Calibration and IMU_Run_Mag_Calibration.
 constexpr float IMU_MAG_OFFSET_X = -0.45f;
 constexpr float IMU_MAG_OFFSET_Y = -5.32f;
@@ -89,8 +89,8 @@ constexpr float IMU_MAG_OFFSET_Z = 30.98f;
 constexpr float IMU_MAG_SCALE_X = 1.101f;
 constexpr float IMU_MAG_SCALE_Y = 1.246f;
 constexpr float IMU_MAG_SCALE_Z = 0.776f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 4.94f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -0.17f;
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = 0.37f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = -2.35f;
 // Production estimator tuning used by IMU_Read() in src/hal/sensors/imu.cpp.
 // Roll/pitch stay Euler on the public interface, but the fusion path now keeps
 // level offsets in the measurement stage and uses vector-based tilt compensation

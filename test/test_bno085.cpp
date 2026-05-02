@@ -37,7 +37,7 @@ void setup()
     if (SensorBus_Lock(pdMS_TO_TICKS(100)))
     {
         // Default address is 0x4A. Change to BNO08x_I2CADDR_ALT (0x4B) if needed.
-        if (!bno08x.begin_I2C(BNO08x_I2CADDR_DEFAULT, &Wire))
+        if (!bno08x.begin_I2C(0x4A, &Wire))
         {
             Serial.println("Failed to find BNO085 chip. Check wiring or I2C address.");
             SensorBus_Unlock();
@@ -90,25 +90,25 @@ void loop()
 
             float t0 = +2.0f * (qr * qi + qj * qk);
             float t1 = +1.0f - 2.0f * (qi * qi + ysqr);
-            float roll = atan2f(t0, t1) * 57.2957795f;
+            float raw_roll = atan2f(t0, t1) * 57.2957795f;
 
             float t2 = +2.0f * (qr * qj - qk * qi);
             t2 = t2 > 1.0f ? 1.0f : (t2 < -1.0f ? -1.0f : t2);
-            float pitch = asinf(t2) * 57.2957795f;
+            float raw_pitch = asinf(t2) * 57.2957795f;
 
             float t3 = +2.0f * (qr * qk + qi * qj);
             float t4 = +1.0f - 2.0f * (ysqr + qk * qk);
-            float yaw = atan2f(t3, t4) * 57.2957795f;
+            float raw_yaw = atan2f(t3, t4) * 57.2957795f;
 
-            Serial.printf("RPY [deg]: Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", roll, pitch, yaw);
+            Serial.printf("RPY [deg]: Roll: %6.2f | Pitch: %6.2f | Yaw: %6.2f\n", raw_roll, raw_pitch, raw_yaw);
             break;
         }
         case SH2_ACCELEROMETER:
-            // Serial.printf("Accel [m/s2]: X: %6.2f, Y: %6.2f, Z: %6.2f\n", sensorValue.un.accelerometer.x, sensorValue.un.accelerometer.y, sensorValue.un.accelerometer.z);
+            //Serial.printf("Accel [m/s2]: X: %6.2f, Y: %6.2f, Z: %6.2f\n", sensorValue.un.accelerometer.x, sensorValue.un.accelerometer.y, sensorValue.un.accelerometer.z);
             break;
         }
     }
     SensorBus_Unlock();
 
-    delay(10);
+    delay(100);
 }
