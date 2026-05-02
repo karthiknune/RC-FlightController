@@ -13,9 +13,10 @@ constexpr uint8_t LORA_PID_AXIS_ROLL  = 1U << 0;
 constexpr uint8_t LORA_PID_AXIS_PITCH = 1U << 1;
 constexpr uint8_t LORA_PID_AXIS_YAW   = 1U << 2;
 constexpr uint8_t LORA_PID_AXIS_ALTITUDE = 1U << 3;
+constexpr uint8_t LORA_PID_AXIS_HEADING = 1U << 4;
 constexpr uint8_t LORA_PID_AXIS_ALL =
     LORA_PID_AXIS_ROLL | LORA_PID_AXIS_PITCH | LORA_PID_AXIS_YAW |
-    LORA_PID_AXIS_ALTITUDE;
+    LORA_PID_AXIS_ALTITUDE | LORA_PID_AXIS_HEADING;
 
 enum class LoRaMessageType : uint8_t {
     PIDCommand = 1,
@@ -39,6 +40,7 @@ struct LoRaPIDCommandPacket {
     PIDTuningValues pitch;
     PIDTuningValues yaw;
     PIDTuningValues altitude;
+    PIDTuningValues heading;
 };
 
 struct LoRaPIDAckPacket {
@@ -51,6 +53,7 @@ struct LoRaPIDAckPacket {
     PIDTuningValues pitch;
     PIDTuningValues yaw;
     PIDTuningValues altitude;
+    PIDTuningValues heading;
 };
 
 struct LoRaAltitudeTargetCommandPacket {
@@ -70,9 +73,9 @@ struct LoRaAltitudeTargetAckPacket {
     float target_altitude_agl;
 };
 
-static_assert(sizeof(LoRaPIDCommandPacket) == 56,
+static_assert(sizeof(LoRaPIDCommandPacket) == 68,
               "Unexpected LoRa PID command packet size");
-static_assert(sizeof(LoRaPIDAckPacket) == 56,
+static_assert(sizeof(LoRaPIDAckPacket) == 68,
               "Unexpected LoRa PID ack packet size");
 static_assert(sizeof(LoRaAltitudeTargetCommandPacket) == 12,
               "Unexpected LoRa altitude target command packet size");
