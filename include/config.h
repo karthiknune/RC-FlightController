@@ -69,28 +69,51 @@ constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 // GPS-------------
 
 // IMU-------------
-constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+// --- ACTIVE BNO085 / SYSTEM IMU SETTINGS ---
+// These settings are actively used by the BNO085 driver and the main flight controller tasks.
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = true;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
 constexpr int IMU_TASK_CORE = 1;
-constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f;
-constexpr float IMU_BODY_FRAME_Y_SIGN = -1.0f;
-constexpr float IMU_BODY_FRAME_Z_SIGN = 1.0f;
-constexpr float IMU_MAG_OFFSET_X =  14.18f; //  these values are from calibration done with electronics inside the airframe
-constexpr float IMU_MAG_OFFSET_Y = -13.12f;
-constexpr float IMU_MAG_OFFSET_Z =   7.12f;
-constexpr float IMU_MAG_SCALE_X =  1.079f;
-constexpr float IMU_MAG_SCALE_Y =  1.186f;
-constexpr float IMU_MAG_SCALE_Z =  0.813f;
-constexpr float IMU_LEVEL_ROLL_OFFSET_DEG = -0.81f;
-constexpr float IMU_LEVEL_PITCH_OFFSET_DEG = 2.62f;
-constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = false;
+// Aircraft installation used in current tests:
+// IMU X arrow -> tail, IMU Y arrow -> left, IMU Z arrow -> up.
+constexpr float IMU_BODY_FRAME_X_SIGN = -1.0f; // Map physical X (Tail) to FRD Forward
+constexpr float IMU_BODY_FRAME_Y_SIGN = 1.0f;  // Map physical Y (Left) to FRD Right
+constexpr float IMU_BODY_FRAME_Z_SIGN = -1.0f; // Map physical Z (Up) to FRD Down
+// Magnetometer die alignment relative to the accel/gyro frame. (it is the same in BNO.... keeping it here just in case we need to apply different mag alignment in the future))
+constexpr float IMU_MAG_SENSOR_ALIGN_X_SIGN = 1.0f;
+constexpr float IMU_MAG_SENSOR_ALIGN_Y_SIGN = 1.0f;
+constexpr float IMU_MAG_SENSOR_ALIGN_Z_SIGN = 1.0f;
+// Level calibration offsets output by the BNO085 Calibration Utility
+constexpr float IMU_LEVEL_ROLL_OFFSET_DEG =  -2.95f;
+constexpr float IMU_LEVEL_PITCH_OFFSET_DEG =  -0.27f;
+
+// --- DEPRECATED ICM-20948 SETTINGS (SAFE TO DELETE) ---
+// The following settings were used by the old ICM-20948 software filter.
+// The BNO085 handles all of this on its internal coprocessor, so these are obsolete.
+constexpr float IMU_MAG_OFFSET_X = -0.45f;
+constexpr float IMU_MAG_OFFSET_Y = -5.32f;
+constexpr float IMU_MAG_OFFSET_Z = 30.98f;
+constexpr float IMU_MAG_SCALE_X = 1.101f;
+constexpr float IMU_MAG_SCALE_Y = 1.246f;
+constexpr float IMU_MAG_SCALE_Z = 0.776f;
+constexpr float IMU_FILTER_TIME_CONSTANT_XY = 0.75f;
+constexpr float IMU_FILTER_TIME_CONSTANT_Z = 0.22f; // Yaw correction time constant
+constexpr float IMU_ACCEL_1G_MPS2 = 9.80665f;
+constexpr float IMU_ACCEL_TRUST_ERROR_MPS2 = 1.75f;
+constexpr float IMU_ACCEL_MIN_TRUST = 0.02f;
+constexpr float IMU_MAG_MIN_TRUST = 0.05f;
+constexpr float IMU_MAG_MIN_HORIZONTAL_RATIO = 0.15f;
+constexpr float IMU_MAG_HEADING_LPF_TIME_CONSTANT = 0.18f;
+constexpr float IMU_YAW_BIAS_CORRECTION_GAIN = 0.08f;
+constexpr float IMU_YAW_MAX_GYRO_BIAS_DPS = 15.0f;
+constexpr bool IMU_RUN_STARTUP_GYRO_CALIBRATION = true;
 // Startup magnetometer calibration is mutually exclusive with gyro and level calibration.
 // If IMU_RUN_MAG_CALIBRATION is true, keep IMU_RUN_STARTUP_GYRO_CALIBRATION and
 // IMU_RUN_STARTUP_LEVEL_CALIBRATION false.
-constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = false;
-constexpr bool IMU_RUN_MAG_CALIBRATION = false;
+constexpr bool IMU_RUN_STARTUP_LEVEL_CALIBRATION = true;
+constexpr bool IMU_RUN_MAG_CALIBRATION = true;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLES = 200;
 constexpr int IMU_GYRO_CALIBRATION_SAMPLE_DELAY_MS = 5;
 constexpr int IMU_LEVEL_CALIBRATION_SAMPLES = 500;
@@ -134,7 +157,7 @@ constexpr int TELEMETRY_TASK_CORE = 1;
 
 // Control-------------
 constexpr FlightMode DEFAULT_FLIGHT_MODE = FlightMode::Manual;
-constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500;   //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
+constexpr unsigned int FLIGHT_MODE_PWM_MANUAL_MAX = 1500; //  these thresholds will need to be tuned based on the actual PWM values from the receiver for each mode
 constexpr unsigned int FLIGHT_MODE_PWM_STABILIZE_MAX = 1850;
 constexpr unsigned int FLIGHT_MODE_PWM_ALT_HOLD_MAX = 2000;
 constexpr int BARO_TASK_PERIOD_MS = 50;

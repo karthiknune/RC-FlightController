@@ -6,7 +6,8 @@
 #include "config.h"
 #include "flight/flightmodes.h"
 #include "flight/motormixer.h"
-#include "hal/sensors/imu.h"
+#include "hal/sensors/bno085.h"
+// #include "hal/sensors/imu.h"
 #include "hal/sensors/baro.h"
 #include "hal/sensors/sensor_bus.h"
 #include "hal/sensors/gps.h"
@@ -40,31 +41,15 @@ namespace {
 
 bool g_flight_mode_initialized = false;
 
-void RunStartupIMUCalibrationIfEnabled() {
-    if (IMU_RUN_STARTUP_GYRO_CALIBRATION) {
-        (void)IMU_Calibrate_Gyro();
+    void UpdateFilteredIMUData()
+    {
+        if (currentIMU.healthy)
+        {
+            imu_data.roll = currentIMU.roll;
+            imu_data.pitch = currentIMU.pitch;
+            imu_data.yaw = currentIMU.yaw;
+        }
     }
-
-    if (IMU_RUN_STARTUP_LEVEL_CALIBRATION) {
-        float roll_offset_deg = 0.0f;
-        float pitch_offset_deg = 0.0f;
-        (void)IMU_Run_Level_Calibration(roll_offset_deg, pitch_offset_deg);
-    }
-
-    if (IMU_RUN_MAG_CALIBRATION) {
-        float offset_x = 0.0f, offset_y = 0.0f, offset_z = 0.0f;
-        float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
-        (void)IMU_Run_Mag_Calibration(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z);
-    }
-}
-
-void UpdateFilteredIMUData() {
-    if (currentIMU.healthy) {
-        imu_data.roll = currentIMU.roll;
-        imu_data.pitch = currentIMU.pitch;
-        imu_data.yaw = currentIMU.yaw;
-    }
-}
 
 FlightMode ResolveFlightModeFallback(FlightMode requested_mode) {
     if (requested_mode != FlightMode::Manual && !currentIMU.healthy) {
@@ -209,8 +194,9 @@ void TaskIMURead(void *pvParameters) {
     const TickType_t xFrequency = pdMS_TO_TICKS(IMU_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
 
-    for (;;) {
-        IMU_Read(currentIMU);
+    for (;;)
+    {
+        BNO085_Read(currentIMU);
         UpdateFilteredIMUData();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
@@ -267,6 +253,9 @@ void TaskFlightControl(void *pvParameters) {
     const TickType_t xFrequency = pdMS_TO_TICKS(FLIGHT_CONTROL_TASK_PERIOD_MS);
     xLastWakeTime = xTaskGetTickCount();
     bool prev_armed = false;
+    uint32_t arm_start_ms = 0;
+    bool arm_tare_pending = false;
+    int last_countdown_sec = -1;
 
     for (;;) {
         GCS_ApplyPendingCommands();
@@ -276,15 +265,38 @@ void TaskFlightControl(void *pvParameters) {
         if (!armed) {
             motormixer_compute(0.0f, 0.0f, 0.0f, 0.0f);
             prev_armed = false;
+            arm_tare_pending = false;
             vTaskDelayUntil(&xLastWakeTime, xFrequency);
             continue;
         }
 
         // Force flight mode re-init on the first tick after arming.
         if (!prev_armed) {
+            arm_start_ms = millis();
+            arm_tare_pending = true;
+            last_countdown_sec = -1;
+            Serial.println("\n[ARMING] Aircraft armed! Streaming live yaw for 5 seconds before tare...");
             g_flight_mode_initialized = false;
         }
         prev_armed = true;
+
+        if (arm_tare_pending) {
+            uint32_t elapsed = millis() - arm_start_ms;
+            int sec_left = 5 - (elapsed / 1000);
+
+            if (sec_left != last_countdown_sec) {
+                last_countdown_sec = sec_left;
+                if (sec_left > 0) {
+                    Serial.printf("  Yaw tare in %ds...\n", sec_left);
+                }
+            }
+
+            if (elapsed >= 5000) {
+                BNO085_TareYaw();
+                Serial.println("\n*** YAW SNAPPED TO 0 DEGREES ***\n");
+                arm_tare_pending = false;
+            }
+        }
 
         const FlightMode desired_mode = DetermineFlightMode();
         const FlightMode effective_mode = ResolveFlightModeFallback(desired_mode);
@@ -389,8 +401,8 @@ void setup() {
     motormixer_init();
     rx_init();
     arming_init();
-    IMU_Init();
-    RunStartupIMUCalibrationIfEnabled();
+    BNO085_Init();
+    // RunStartupInit calibrations for icm
     Barometer_Init();
     Airspeed_Init();
     GPS_Init();
