@@ -19,7 +19,9 @@ constexpr uint8_t LORA_PID_AXIS_ALL =
 
 enum class LoRaMessageType : uint8_t {
     PIDCommand = 1,
-    PIDAck = 2
+    PIDAck = 2,
+    AltitudeTargetCommand = 3,
+    AltitudeTargetAck = 4
 };
 
 enum class LoRaPIDAckStatus : uint8_t {
@@ -51,7 +53,28 @@ struct LoRaPIDAckPacket {
     PIDTuningValues altitude;
 };
 
+struct LoRaAltitudeTargetCommandPacket {
+    uint32_t magic;
+    uint8_t type;
+    uint8_t sequence;
+    uint8_t reserved[2];
+    float target_altitude_agl;
+};
+
+struct LoRaAltitudeTargetAckPacket {
+    uint32_t magic;
+    uint8_t type;
+    uint8_t sequence;
+    uint8_t status;
+    uint8_t reserved;
+    float target_altitude_agl;
+};
+
 static_assert(sizeof(LoRaPIDCommandPacket) == 56,
               "Unexpected LoRa PID command packet size");
 static_assert(sizeof(LoRaPIDAckPacket) == 56,
               "Unexpected LoRa PID ack packet size");
+static_assert(sizeof(LoRaAltitudeTargetCommandPacket) == 12,
+              "Unexpected LoRa altitude target command packet size");
+static_assert(sizeof(LoRaAltitudeTargetAckPacket) == 12,
+              "Unexpected LoRa altitude target ack packet size");

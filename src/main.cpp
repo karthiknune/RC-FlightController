@@ -144,8 +144,12 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.des_pitch    = get_des_pitch();
     snapshot.des_yaw      = get_des_yaw();
     snapshot.des_throttle = get_des_throttle();
-    snapshot.altitude = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
-    snapshot.des_altitude = navigation.get_target_altitude();
+    if ((baro_data.healthy || gps_data.lock_acquired) && home_is_set()) {
+        const float actual_alt_msl = baro_data.healthy ? baro_data.altitude : gps_data.altitude;
+        snapshot.altitude = calc_AGL(actual_alt_msl);
+    } else {
+        snapshot.altitude = -1.0f;
+    }
     snapshot.airspeed = airspeed_data.healthy ? airspeed_data.airspeed_mps : 0.0f;
     snapshot.gps_lat = static_cast<float>(gps_data.latitude);
     snapshot.gps_long = static_cast<float>(gps_data.longitude);
@@ -157,6 +161,7 @@ telemetrydata BuildTelemetrySnapshot() {
     snapshot.gps_lock_acquired = gps_data.lock_acquired ? 1 : 0;
     snapshot.baro_altitude = baro_data.altitude;
     snapshot.flightmode = static_cast<float>(static_cast<int>(active_flight_mode));
+    snapshot.des_altitude = active_flight_mode == FlightMode::AltHold ? GCS_GetTargetAltitudeAGL() : navigation.get_target_altitude();
     snapshot.waypoint_distance = navigation.get_target_distance();
     snapshot.waypoint_heading = navigation.get_target_heading();
     snapshot.waypoint_target_alt = navigation.get_target_altitude();

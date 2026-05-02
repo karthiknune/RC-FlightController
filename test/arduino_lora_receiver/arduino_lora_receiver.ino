@@ -3,6 +3,8 @@
 // pid yaw   <kp> <ki> <kd>
 // pid altitude <kp> <ki> <kd>
 // pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd> [<akp> <aki> <akd>]
+// target altitude <agl_m>
+// alt <agl_m>
 // show pid
 // cancel
 // help
@@ -48,7 +50,9 @@ constexpr uint8_t LORA_PID_AXIS_ALL =
 
 enum class LoRaMessageType : uint8_t {
   PIDCommand = 1,
-  PIDAck = 2
+  PIDAck = 2,
+  AltitudeTargetCommand = 3,
+  AltitudeTargetAck = 4
 };
 
 enum class LoRaPIDAckStatus : uint8_t {
@@ -78,6 +82,23 @@ struct LoRaPIDAckPacket {
   PIDTuningValues pitch;
   PIDTuningValues yaw;
   PIDTuningValues altitude;
+};
+
+struct LoRaAltitudeTargetCommandPacket {
+  uint32_t magic;
+  uint8_t type;
+  uint8_t sequence;
+  uint8_t reserved[2];
+  float target_altitude_agl;
+};
+
+struct LoRaAltitudeTargetAckPacket {
+  uint32_t magic;
+  uint8_t type;
+  uint8_t sequence;
+  uint8_t status;
+  uint8_t reserved;
+  float target_altitude_agl;
 };
 
 struct TelemetryPacket {
@@ -151,19 +172,31 @@ struct PendingPIDCommandState {
   unsigned long last_send_ms;
 };
 
+struct PendingAltitudeTargetCommandState {
+  bool active;
+  LoRaAltitudeTargetCommandPacket packet;
+  uint32_t attempt_count;
+  unsigned long last_send_ms;
+};
+
 static_assert(sizeof(LoRaPIDCommandPacket) == 56, "PID command packet size mismatch");
 static_assert(sizeof(LoRaPIDAckPacket) == 56, "PID ack packet size mismatch");
+static_assert(sizeof(LoRaAltitudeTargetCommandPacket) == 12, "Altitude target command packet size mismatch");
+static_assert(sizeof(LoRaAltitudeTargetAckPacket) == 12, "Altitude target ack packet size mismatch");
 static_assert(sizeof(TelemetryPacket) == 232, "Telemetry packet size mismatch");
 
 uint32_t g_packet_counter = 0;
-uint8_t g_next_pid_sequence = 1U;
+uint8_t g_next_command_sequence = 1U;
 char g_serial_line[SERIAL_LINE_BUFFER_SIZE] = {};
 size_t g_serial_line_length = 0U;
 PendingPIDCommandState g_pending_pid_command = {};
+PendingAltitudeTargetCommandState g_pending_altitude_target_command = {};
 PIDTuningValues g_last_roll_pid = {};
 PIDTuningValues g_last_pitch_pid = {};
 PIDTuningValues g_last_yaw_pid = {};
 PIDTuningValues g_last_altitude_pid = {};
+float g_last_target_altitude_agl = 0.0f;
+bool g_have_remote_target_altitude = false;
 bool g_have_remote_pid_state = false;
 
 void PrintPIDTuning(const char *label, const PIDTuningValues &tuning) {
@@ -181,6 +214,8 @@ void PrintPIDHelp() {
   Serial.println("  pid yaw   <kp> <ki> <kd>");
   Serial.println("  pid altitude <kp> <ki> <kd>");
   Serial.println("  pid all   <rkp> <rki> <rkd> <pkp> <pki> <pkd> <ykp> <yki> <ykd> [<akp> <aki> <akd>]");
+  Serial.println("  target altitude <agl_m>");
+  Serial.println("  alt <agl_m>");
   Serial.println("  show pid");
   Serial.println("  cancel");
   Serial.println("  help");
@@ -281,13 +316,18 @@ void PrintTelemetryPacket(const TelemetryPacket &packet, int rssi, float snr) {
 void PrintLastKnownPIDState() {
   if (!g_have_remote_pid_state) {
     Serial.println("No PID acknowledgement received yet.");
-    return;
+  } else {
+    PrintPIDTuning("Roll ", g_last_roll_pid);
+    PrintPIDTuning("Pitch", g_last_pitch_pid);
+    PrintPIDTuning("Yaw  ", g_last_yaw_pid);
+    PrintPIDTuning("Alt  ", g_last_altitude_pid);
   }
 
-  PrintPIDTuning("Roll ", g_last_roll_pid);
-  PrintPIDTuning("Pitch", g_last_pitch_pid);
-  PrintPIDTuning("Yaw  ", g_last_yaw_pid);
-  PrintPIDTuning("Alt  ", g_last_altitude_pid);
+  if (g_have_remote_target_altitude) {
+    Serial.printf("Target Altitude %.2f m AGL\n", g_last_target_altitude_agl);
+  } else {
+    Serial.println("No altitude target acknowledgement received yet.");
+  }
 }
 
 bool SendLoRaPacket(const uint8_t *data, size_t length) {
@@ -299,11 +339,25 @@ bool SendLoRaPacket(const uint8_t *data, size_t length) {
   return begin_result == 1 && bytes_written == length && end_result == 1;
 }
 
-void QueuePIDCommand(const LoRaPIDCommandPacket &packet) {
+bool HasPendingCommand() {
+  return g_pending_pid_command.active || g_pending_altitude_target_command.active;
+}
+
+uint8_t PendingCommandSequence() {
   if (g_pending_pid_command.active) {
+    return g_pending_pid_command.packet.sequence;
+  }
+  if (g_pending_altitude_target_command.active) {
+    return g_pending_altitude_target_command.packet.sequence;
+  }
+  return 0U;
+}
+
+void QueuePIDCommand(const LoRaPIDCommandPacket &packet) {
+  if (HasPendingCommand()) {
     Serial.printf(
-        "Still waiting for ACK on seq=%u. Type 'cancel' before queueing another PID update.\n",
-        static_cast<unsigned>(g_pending_pid_command.packet.sequence));
+        "Still waiting for ACK on seq=%u. Type 'cancel' before queueing another command.\n",
+        static_cast<unsigned>(PendingCommandSequence()));
     return;
   }
 
@@ -317,6 +371,30 @@ void QueuePIDCommand(const LoRaPIDCommandPacket &packet) {
                 static_cast<unsigned>(packet.axis_mask));
 }
 
+void QueueAltitudeTargetCommand(float target_altitude_agl) {
+  if (HasPendingCommand()) {
+    Serial.printf(
+        "Still waiting for ACK on seq=%u. Type 'cancel' before queueing another command.\n",
+        static_cast<unsigned>(PendingCommandSequence()));
+    return;
+  }
+
+  LoRaAltitudeTargetCommandPacket packet = {};
+  packet.magic = LORA_PID_PROTOCOL_MAGIC;
+  packet.type = static_cast<uint8_t>(LoRaMessageType::AltitudeTargetCommand);
+  packet.sequence = g_next_command_sequence++;
+  packet.target_altitude_agl = target_altitude_agl;
+
+  g_pending_altitude_target_command.active = true;
+  g_pending_altitude_target_command.packet = packet;
+  g_pending_altitude_target_command.attempt_count = 0U;
+  g_pending_altitude_target_command.last_send_ms = 0UL;
+
+  Serial.printf("Queued altitude target update seq=%u target=%.2f m AGL\n",
+                static_cast<unsigned>(packet.sequence),
+                packet.target_altitude_agl);
+}
+
 void QueueAxisPIDCommand(uint8_t axis_mask,
                          const PIDTuningValues &roll,
                          const PIDTuningValues &pitch,
@@ -325,7 +403,7 @@ void QueueAxisPIDCommand(uint8_t axis_mask,
   LoRaPIDCommandPacket packet = {};
   packet.magic = LORA_PID_PROTOCOL_MAGIC;
   packet.type = static_cast<uint8_t>(LoRaMessageType::PIDCommand);
-  packet.sequence = g_next_pid_sequence++;
+  packet.sequence = g_next_command_sequence++;
   packet.axis_mask = axis_mask;
   packet.roll = roll;
   packet.pitch = pitch;
@@ -367,8 +445,66 @@ void HandlePIDAck(const LoRaPIDAckPacket &packet, int rssi, float snr) {
   }
 }
 
+void HandleAltitudeTargetAck(const LoRaAltitudeTargetAckPacket &packet, int rssi, float snr) {
+  if (packet.magic != LORA_PID_PROTOCOL_MAGIC ||
+      packet.type != static_cast<uint8_t>(LoRaMessageType::AltitudeTargetAck)) {
+    Serial.println("[ACK] Ignored malformed altitude target ack.");
+    return;
+  }
+
+  g_last_target_altitude_agl = packet.target_altitude_agl;
+  g_have_remote_target_altitude = true;
+
+  Serial.printf("[ACK] altitude target seq=%u status=%u target=%.2f m AGL RSSI=%d SNR=%.1f\n",
+                static_cast<unsigned>(packet.sequence),
+                static_cast<unsigned>(packet.status),
+                packet.target_altitude_agl,
+                rssi,
+                snr);
+
+  if (g_pending_altitude_target_command.active &&
+      g_pending_altitude_target_command.packet.sequence == packet.sequence &&
+      packet.status == static_cast<uint8_t>(LoRaPIDAckStatus::Applied)) {
+    Serial.printf("[ACK] altitude target seq=%u confirmed after %lu attempt(s).\n\n",
+                  static_cast<unsigned>(packet.sequence),
+                  static_cast<unsigned long>(g_pending_altitude_target_command.attempt_count));
+    g_pending_altitude_target_command.active = false;
+  } else {
+    Serial.println();
+  }
+}
+
 void ServicePendingPIDCommand() {
-  if (!g_pending_pid_command.active) {
+  if (!HasPendingCommand()) {
+    return;
+  }
+
+  if (g_pending_altitude_target_command.active) {
+    const unsigned long now = millis();
+    if (g_pending_altitude_target_command.attempt_count > 0U &&
+        (now - g_pending_altitude_target_command.last_send_ms) < PID_RETRY_INTERVAL_MS) {
+      return;
+    }
+
+    if (g_pending_altitude_target_command.attempt_count >= MAX_PID_RETRY_ATTEMPTS) {
+      Serial.printf("[TX] Alt target seq=%u failed after %lu attempts.\n\n",
+                    static_cast<unsigned>(g_pending_altitude_target_command.packet.sequence),
+                    static_cast<unsigned long>(g_pending_altitude_target_command.attempt_count));
+      g_pending_altitude_target_command.active = false;
+      return;
+    }
+
+    g_pending_altitude_target_command.attempt_count++;
+    g_pending_altitude_target_command.last_send_ms = now;
+    const bool sent = SendLoRaPacket(
+        reinterpret_cast<const uint8_t *>(&g_pending_altitude_target_command.packet),
+        sizeof(g_pending_altitude_target_command.packet));
+
+    Serial.printf("[TX] Alt target seq=%u attempt=%lu target=%.2f %s\n",
+                  static_cast<unsigned>(g_pending_altitude_target_command.packet.sequence),
+                  static_cast<unsigned long>(g_pending_altitude_target_command.attempt_count),
+                  g_pending_altitude_target_command.packet.target_altitude_agl,
+                  sent ? "sent" : "failed");
     return;
   }
 
@@ -400,14 +536,15 @@ void ServicePendingPIDCommand() {
 
 
 void CancelPendingPIDCommand() {
-  if (!g_pending_pid_command.active) {
-    Serial.println("No pending PID update.");
+  if (!HasPendingCommand()) {
+    Serial.println("No pending command.");
     return;
   }
 
-  Serial.printf("Cancelled pending PID update seq=%u.\n",
-                static_cast<unsigned>(g_pending_pid_command.packet.sequence));
+  Serial.printf("Cancelled pending command seq=%u.\n",
+                static_cast<unsigned>(PendingCommandSequence()));
   g_pending_pid_command.active = false;
+  g_pending_altitude_target_command.active = false;
 }
 
 void HandleSerialCommand(char *line) {
@@ -436,6 +573,17 @@ void HandleSerialCommand(char *line) {
   }
 
   float values[12] = {};
+  if (sscanf(line, "target altitude %f", &values[0]) == 1 ||
+      sscanf(line, "altitude target %f", &values[0]) == 1 ||
+      sscanf(line, "alt %f", &values[0]) == 1) {
+    if (values[0] < 0.0f) {
+      Serial.println("Altitude target must be >= 0 m AGL.");
+      return;
+    }
+    QueueAltitudeTargetCommand(values[0]);
+    return;
+  }
+
   if (sscanf(line, "pid roll %f %f %f", &values[0], &values[1], &values[2]) == 3) {
     QueueAxisPIDCommand(LORA_PID_AXIS_ROLL,
                         {values[0], values[1], values[2]},
@@ -551,6 +699,8 @@ void setup() {
                 static_cast<unsigned>(sizeof(TelemetryPacket)));
   Serial.printf("Expected PID ack payload size: %u bytes\n",
                 static_cast<unsigned>(sizeof(LoRaPIDAckPacket)));
+  Serial.printf("Expected altitude target ack payload size: %u bytes\n",
+                static_cast<unsigned>(sizeof(LoRaAltitudeTargetAckPacket)));
 
   if (!InitLoRa()) {
     Serial.println("LoRa init failed. Check SPI and module wiring.");
@@ -579,6 +729,17 @@ void loop() {
                       static_cast<unsigned>(bytes_read),
                       static_cast<unsigned>(sizeof(packet)));
       }
+    } else if (packet_size == static_cast<int>(sizeof(LoRaAltitudeTargetAckPacket))) {
+      LoRaAltitudeTargetAckPacket packet = {};
+      const size_t bytes_read =
+          LoRa.readBytes(reinterpret_cast<uint8_t *>(&packet), sizeof(packet));
+      if (bytes_read == sizeof(packet)) {
+        HandleAltitudeTargetAck(packet, LoRa.packetRssi(), LoRa.packetSnr());
+      } else {
+        Serial.printf("[ACK] Short read: got %u of %u bytes\n",
+                      static_cast<unsigned>(bytes_read),
+                      static_cast<unsigned>(sizeof(packet)));
+      }
     } else if (packet_size == static_cast<int>(sizeof(TelemetryPacket))) {
       ++g_packet_counter;
 
@@ -600,7 +761,7 @@ void loop() {
         
         // SYNCHRONIZED TX: The Flight Controller just finished sending this telemetry
         // and has returned to RX mode. If we have a command, send it right now!
-        if (g_pending_pid_command.active) {
+        if (HasPendingCommand()) {
           delay(15); // Brief 15ms window to let the FC's SPI bus switch back to RX
           ServicePendingPIDCommand();
         }
@@ -612,7 +773,7 @@ void loop() {
   }
 
   // Fallback: If telemetry connection drops completely, still retry periodically
-  if (g_pending_pid_command.active && (millis() - g_pending_pid_command.last_send_ms > PID_RETRY_INTERVAL_MS)) {
+  if (HasPendingCommand()) {
     ServicePendingPIDCommand();
   }
   
