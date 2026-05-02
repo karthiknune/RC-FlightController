@@ -1,3 +1,11 @@
+/**
+ * BNO085 Interactive Calibration Utility
+ *
+ * A guided state-machine utility that safely enables background calibration,
+ * guides the user through magnetometer figure-8 tumbling, commands the sensor
+ * to burn the offsets to its internal EEPROM, and automatically calculates static
+ * Roll/Pitch desk-level offsets for config.h.
+ */
 #include <Arduino.h>
 #include "config.h"
 #include "hal/sensors/bno085.h"
@@ -12,6 +20,7 @@ namespace
     uint32_t g_last_imu_read_ms = 0;
     uint32_t g_last_print_ms = 0;
 
+    // Defines the steps of the interactive calibration wizard
     enum CalibState
     {
         STATE_WAIT_START,
@@ -138,6 +147,7 @@ void loop()
         }
         if (remain <= 0)
         {
+            // Trigger the native EEPROM burn. This takes roughly 1.5 - 2 seconds internally.
             Serial.println("\nSaving dynamic calibration to BNO085 internal flash...");
             BNO085_SaveCalibrationToFlash();
             Serial.println("*** FLASH SAVED ***\n");

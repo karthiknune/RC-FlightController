@@ -1,3 +1,11 @@
+/**
+ * BNO085 Hardware Abstraction Layer
+ *
+ * Wraps the Adafruit BNO08x library and the native Hillcrest SH-2 C-API to communicate
+ * with the BNO085 over a shared I2C bus. Extracts Quaternions to prevent gimbal lock,
+ * converts them to Euler angles, applies physical mounting offsets, and implements
+ * robust error handling to prevent I2C bus crashes during EEPROM writes.
+ */
 #include "hal/sensors/bno085.h"
 #include <Wire.h>
 #include <Adafruit_BNO08x.h>
@@ -21,13 +29,16 @@ namespace
     float g_gyro_bias_x = 0.0f;
     float g_gyro_bias_y = 0.0f;
     float g_gyro_bias_z = 0.0f;
+
+    // Latch used to grab the very first valid yaw reading after boot to use as a 0.0 baseline
     bool g_initial_yaw_tared = false;
 
-    // Cache for asynchronous reports
+    // Cache for asynchronous reports (retains last known good values between events)
     IMUData_raw g_cached_data = {};
 
     bool TryInitializeBNO()
     {
+        // Enforce a reconnect interval to prevent spamming/locking the I2C bus if disconnected
         const uint32_t now_ms = millis();
         if (g_last_init_attempt_ms != 0 && (now_ms - g_last_init_attempt_ms) < SENSOR_RECONNECT_INTERVAL_MS)
         {
@@ -48,7 +59,7 @@ namespace
 
         if (begin_ok)
         {
-            // Enable desired reports at 100Hz (10000us)
+            // Enable desired reports at 100Hz (10000us) and 50Hz (20000us)
             bno08x.enableReport(SH2_ROTATION_VECTOR, 10000);
             bno08x.enableReport(SH2_ACCELEROMETER, 10000);
             bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 10000);
@@ -92,6 +103,8 @@ void BNO085_Read(IMUData_raw &data)
         return;
     }
 
+    // If the BNO085 resets itself (e.g., from a power glitch or post-flash save),
+    // we must catch it and re-enable the data stream reports.
     if (bno08x.wasReset())
     {
         bno08x.enableReport(SH2_ROTATION_VECTOR, 10000);
@@ -106,7 +119,7 @@ void BNO085_Read(IMUData_raw &data)
     }
 
     sh2_SensorValue_t sensorValue;
-    // Drain the event queue for fresh data
+    // Drain the event queue for fresh data. The BNO085 pushes reports asynchronously.
     while (bno08x.getSensorEvent(&sensorValue))
     {
         switch (sensorValue.sensorId)
@@ -117,7 +130,8 @@ void BNO085_Read(IMUData_raw &data)
             g_cached_data.accel_z = sensorValue.un.accelerometer.z * IMU_BODY_FRAME_Z_SIGN;
             break;
         case SH2_GYROSCOPE_CALIBRATED:
-            // BNO outputs rad/s, datatypes struct standardizes to deg/s
+            // BNO outputs rad/s, but our flight controller standardizes to deg/s.
+            // 1 rad/s = 57.2957795 degrees/s.
             g_cached_data.gyro_x = (sensorValue.un.gyroscope.x * 57.2957795f) * IMU_BODY_FRAME_X_SIGN;
             g_cached_data.gyro_y = (sensorValue.un.gyroscope.y * 57.2957795f) * IMU_BODY_FRAME_Y_SIGN;
             g_cached_data.gyro_z = (sensorValue.un.gyroscope.z * 57.2957795f) * IMU_BODY_FRAME_Z_SIGN;
@@ -139,6 +153,7 @@ void BNO085_Read(IMUData_raw &data)
             break;
         case SH2_ROTATION_VECTOR:
         {
+            // The Rotation Vector represents the fused, tilt-compensated orientation.
             g_last_calibration_status = sensorValue.status;
 
             float qr = sensorValue.un.rotationVector.real;
@@ -147,6 +162,8 @@ void BNO085_Read(IMUData_raw &data)
             float qk = sensorValue.un.rotationVector.k;
             float ysqr = qj * qj;
 
+            // Convert the quaternion directly to Euler Angles (Roll/Pitch/Yaw)
+            // This bypasses gimbal lock issues inherent in raw trig calculations.
             float t0 = +2.0f * (qr * qi + qj * qk);
             float t1 = +1.0f - 2.0f * (qi * qi + ysqr);
             float raw_roll = atan2f(t0, t1) * 57.2957795f;
@@ -159,16 +176,19 @@ void BNO085_Read(IMUData_raw &data)
             float t4 = +1.0f - 2.0f * (ysqr + qk * qk);
             float raw_yaw = atan2f(t3, t4) * 57.2957795f;
 
+            // Apply aircraft mounting signs and static config.h level offsets
             g_cached_data.roll = (raw_roll * IMU_BODY_FRAME_X_SIGN) - IMU_LEVEL_ROLL_OFFSET_DEG;
             g_cached_data.pitch = (raw_pitch * IMU_BODY_FRAME_Y_SIGN) - IMU_LEVEL_PITCH_OFFSET_DEG;
 
-            // Automatically tare the yaw to 0.0 on the very first valid reading after boot
+            // Latch the very first valid yaw reading as our temporary software offset.
+            // This ensures the drone's nose always reads exactly 0.0 on the bench after a reset.
             if (!g_initial_yaw_tared)
             {
                 g_yaw_tare_offset = raw_yaw * IMU_BODY_FRAME_Z_SIGN;
                 g_initial_yaw_tared = true;
             }
 
+            // Apply the active software tare
             float yaw_val = (raw_yaw * IMU_BODY_FRAME_Z_SIGN) - g_yaw_tare_offset;
             // Keep yaw wrapped between -180 and +180
             while (yaw_val > 180.0f)

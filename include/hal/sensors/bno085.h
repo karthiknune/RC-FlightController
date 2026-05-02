@@ -1,3 +1,11 @@
+/**
+ * BNO085 Sensor Driver Interface
+ *
+ * This interface provides a clean, drop-in replacement for raw IMUs (like the ICM-20948).
+ * Because the BNO085 handles all complex sensor fusion (Kalman filtering, tilt-compensation,
+ * and magnetic interference rejection) on its own internal ARM coprocessor, this interface
+ * primarily acts as a bridge to extract the clean ENU (East-North-Up) data into our system.
+ */
 #pragma once
 
 #include "datatypes.h"
@@ -14,12 +22,16 @@ void BNO085_Read(IMUData_raw &data);
 void BNO085_EnableBackgroundCalibration();
 
 // Saves the current dynamic calibration data (DCD) to the BNO085's internal flash memory
+// Once saved, the sensor will automatically load these learned biases on every future boot.
 void BNO085_SaveCalibrationToFlash();
 
 // Returns the current calibration accuracy status (0 = Unreliable, 3 = High)
+// Used primarily by the calibration utility to know when it is safe to save to flash.
 uint8_t BNO085_GetCalibrationStatus();
 
 // Zeros out the current yaw (heading) in software so the drone faces 0 degrees
+// This only affects the relative yaw reported to the flight controller, leaving the
+// sensor's internal True North tracking completely intact and safe.
 void BNO085_TareYaw();
 
 // Fetches the dynamic calibration biases currently evaluated/stored by the sensor
