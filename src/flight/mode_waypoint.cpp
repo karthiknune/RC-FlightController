@@ -79,5 +79,5 @@ void mode_waypoint_run(){
                       roll_output);
     }
 
-    motormixer_compute(throttle_output, roll_output, pitch_output, 0.0f);
+    motormixer_compute(throttle_output, -roll_output, pitch_output, 0.0f);
 }

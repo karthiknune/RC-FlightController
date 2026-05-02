@@ -293,7 +293,9 @@ constexpr bool WAYPOINT_USE_IMU_YAW = true;
 const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {
     
-    {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt_agl in m
-    {2, 2, 100},
+    {40.435373,-86.893483, 100},   //  lat, long, alt_agl in m
+    {40.436972,-86.893125, 100},
+    {40.436907,-86.892063, 100},
+    {40.435565,-86.892256, 100},
     
 };
