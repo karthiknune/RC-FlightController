@@ -60,6 +60,7 @@ void mode_waypoint_run(){
         const float heading_error = math::wrap_heading_error(target_heading - actual_heading);
         const float desired_heading_error = 0.0f;
         desired_roll = headingerror_pid.compute(heading_error, desired_heading_error, flight_control_dt_seconds);
+        desired_roll= -desired_roll;
     }
     desired_roll = math::clamp_value(desired_roll, -max_roll_angle, max_roll_angle);
 
@@ -79,5 +80,5 @@ void mode_waypoint_run(){
                       roll_output);
     }
 
-    motormixer_compute(throttle_output, -roll_output, pitch_output, 0.0f);
+    motormixer_compute(throttle_output, roll_output, pitch_output, 0.0f);
 }

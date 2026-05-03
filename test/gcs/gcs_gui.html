@@ -20,7 +20,7 @@
     .leaflet-container { background:#1d2a48 !important; font-family:'DM Sans',sans-serif; }
     .leaflet-control-zoom a { background:#26334f !important; color:#a8c5e8 !important; border-color:#3a4d70 !important; }
     .leaflet-control-zoom a:hover { background:#324063 !important; color:#00d8f0 !important; }
-    .leaflet-tile-pane { filter: brightness(1.15) saturate(0.95); }
+    .basemap-dark .leaflet-tile-pane { filter: brightness(1.15) saturate(0.95); }
   </style>
 </head>
 <body>
@@ -669,15 +669,22 @@ function CommandTerminal({ sendCommand, cmdLog }) {
 }
 
 /* ─── LEAFLET MAP ────────────────────────────────────────────────── */
+const BASEMAPS = {
+  dark:      { label:'Dark',      url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',  opts:{ maxZoom:20, subdomains:'abcd' } },
+  light:     { label:'Light',     url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', opts:{ maxZoom:20, subdomains:'abcd' } },
+  satellite: { label:'Satellite', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts:{ maxZoom:19 } },
+};
+
 function MissionMap({ lat, lon, heading, wpLat, wpLon, wpIdx }) {
   const divRef=useRef(null), mapRef=useRef(null), planeRef=useRef(null);
   const trailPoly=useRef(null), wpLine=useRef(null), wpMarker=useRef(null);
+  const tileRef=useRef(null);
   const trailPts=useRef([]), lastWpIdx=useRef(-1), centered=useRef(false);
+  const [basemap, setBasemap] = useState('dark');
 
   useEffect(() => {
     if (mapRef.current || !divRef.current) return;
     const m = L.map(divRef.current, { zoomControl:false, attributionControl:false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:20, subdomains:'abcd' }).addTo(m);
     L.control.zoom({ position:'bottomright' }).addTo(m);
     trailPoly.current = L.polyline([], { color:T.cyan, weight:1.5, opacity:0.55 }).addTo(m);
     wpLine.current    = L.polyline([], { color:T.violet, weight:1, dashArray:'4 5', opacity:0.4 }).addTo(m);
@@ -685,6 +692,16 @@ function MissionMap({ lat, lon, heading, wpLat, wpLon, wpIdx }) {
     mapRef.current = m;
     return () => { m.remove(); mapRef.current = null; };
   }, []);
+
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    const cfg = BASEMAPS[basemap] || BASEMAPS.dark;
+    const next = L.tileLayer(cfg.url, cfg.opts);
+    next.addTo(m);
+    if (tileRef.current) m.removeLayer(tileRef.current);
+    tileRef.current = next;
+  }, [basemap]);
 
   useEffect(() => {
     const m = mapRef.current;
@@ -727,7 +744,22 @@ function MissionMap({ lat, lon, heading, wpLat, wpLon, wpIdx }) {
 
   return (
     <div style={{ position:'relative', width:'100%', height:'100%' }}>
-      <div ref={divRef} style={{ width:'100%', height:'100%' }} />
+      <div ref={divRef} className={`basemap-${basemap}`} style={{ width:'100%', height:'100%' }} />
+      <div style={{ position:'absolute', top:8, right:8, zIndex:1000, display:'flex', gap:2,
+                    background:T.panel+'e0', border:`1px solid ${T.border}`, borderRadius:4, padding:2 }}>
+        {Object.entries(BASEMAPS).map(([k, v]) => {
+          const active = basemap === k;
+          return (
+            <button key={k} onClick={() => setBasemap(k)}
+              style={{ font:'600 9px DM Sans', textTransform:'uppercase', letterSpacing:'0.08em',
+                       padding:'4px 8px', borderRadius:3, cursor:'pointer', border:'none',
+                       background: active ? T.cyan : 'transparent',
+                       color: active ? T.bg : T.textDim }}>
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
       {lat == null && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
                       background:'rgba(26,37,64,0.7)', zIndex:999, flexDirection:'column', gap:8 }}>
