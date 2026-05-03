@@ -70,6 +70,9 @@ constexpr bool ROLL_PID_DEBUG_OUTPUT_ENABLED = false;
 
 // IMU-------------
 constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
+// --- ACTIVE BNO085 / SYSTEM IMU SETTINGS ---
+// These settings are actively used by the BNO085 driver and the main flight controller tasks.
+constexpr bool IMU_DEBUG_OUTPUT_ENABLED = false;
 constexpr int IMU_TASK_PERIOD_MS = 10;
 constexpr int IMU_TASK_STACK_SIZE = 4096;
 constexpr int IMU_TASK_PRIORITY = 1;
@@ -214,8 +217,8 @@ constexpr float rudder_min_deflection_deg = -40.0f;
 //Limits
 
 const float max_roll_angle = 45.0f; 
-const float max_pitch_angle = 10.0f; 
-const float max_yaw_angle = 30.0f;
+const float max_pitch_angle = 20.0f; 
+const float max_yaw_angle = 45.0f;
 
 ///tuning parameters
 const float roll_kp = 15.0f;
@@ -267,10 +270,16 @@ constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 //   false -> GPS course-over-ground (true ground track; gated by WAYPOINT_MIN_GROUND_SPEED_MPS)
 constexpr bool WAYPOINT_USE_IMU_YAW = true;
 
-const int num_waypoints = 2;
+const int num_waypoints = 6;
 const waypoint missionwaypoints[]= {
     
     {2.0536, 1.2189333333333333333, 100},   //  lat, long, alt_agl in m
     {2, 2, 100},
+    {40.435373,-86.893483, 100},   //  lat, long, alt_agl in m
+    {40.43561795473969, -86.89294656196148, 100},
+    {40.43596092986441, -86.89254959503982, 100},
+    {40.43637739730667, -86.89252813736839, 100},
+    {40.43685918975683, -86.89262469688987, 100},
+    {40.4371531631152, -86.89300020614009, 100}
     
 };

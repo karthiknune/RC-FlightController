@@ -19,18 +19,34 @@ extern IMUData_filtered imu_data;
 extern BarometerData baro_data;
 extern GPSData gps_data;
 
+static float g_des_roll_setpoint = 0.0f;
+static float g_des_pitch_setpoint = 0.0f;
+
 void mode_waypoint_init() {
     roll_pid.PIDreset();
-    pitch_pid.PIDreset(); 
-    altitude_pid.PIDreset();  
-    headingerror_pid.PIDreset();  
+    pitch_pid.PIDreset();
+    altitude_pid.PIDreset();
+    headingerror_pid.PIDreset();
     //yaw_pid.PIDreset();
+    g_des_roll_setpoint = 0.0f;
+    g_des_pitch_setpoint = 0.0f;
+}
+
+float mode_waypoint_get_des_roll() {
+    return g_des_roll_setpoint;
+}
+
+float mode_waypoint_get_des_pitch() {
+    return g_des_pitch_setpoint;
 }
 
 void mode_waypoint_run(){
     const float throttle_output = get_des_throttle();
 
     if (navigation.mission_completed() || !gps_data.lock_acquired || !home_is_set()) {
+        g_des_roll_setpoint = 0.0f;
+        g_des_pitch_setpoint = 2.0f;
+
         const float level_roll_output =
             roll_pid.compute(0.0f, imu_data.roll, flight_control_dt_seconds);
         const float level_pitch_output =
@@ -67,10 +83,13 @@ void mode_waypoint_run(){
         altitude_pid.compute(target_altitude_agl, actual_altitude_agl, flight_control_dt_seconds);
     desired_pitch = math::clamp_value(desired_pitch, -max_pitch_angle, max_pitch_angle);
 
+    g_des_roll_setpoint = desired_roll;
+    g_des_pitch_setpoint = desired_pitch;
+
     const float roll_output =
         roll_pid.compute(desired_roll, imu_data.roll, flight_control_dt_seconds);
     const float pitch_output =
-        pitch_pid.compute(desired_pitch, imu_data.pitch, flight_control_dt_seconds);
+        pitch_pid.compute(-desired_pitch, imu_data.pitch, flight_control_dt_seconds);
 
     if (ROLL_PID_DEBUG_OUTPUT_ENABLED) {
         Serial.printf("target_roll=%.2f actual_roll=%.2f roll_pid_output=%.2f\n",
