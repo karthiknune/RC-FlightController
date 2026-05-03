@@ -290,12 +290,19 @@ constexpr float WAYPOINT_MIN_GROUND_SPEED_MPS = 1.5f;
 //   false -> GPS course-over-ground (true ground track; gated by WAYPOINT_MIN_GROUND_SPEED_MPS)
 constexpr bool WAYPOINT_USE_IMU_YAW = true;
 
-const int num_waypoints = 2;
 const waypoint missionwaypoints[]= {
     
-    {40.435373,-86.893483, 100},   //  lat, long, alt_agl in m
-    {40.436972,-86.893125, 100},
-    {40.436907,-86.892063, 100},
-    {40.435565,-86.892256, 100},
+    // {40.435373,-86.893483, 100},   //  lat, long, alt_agl in m
+    // {40.436972,-86.893125, 100},
+    // {40.436907,-86.892063, 100},
+    // {40.435565,-86.892256, 100},
     
+
+
+    {40.45462827861016, -86.92328445950628, 5},
+    {40.45466497764294, -86.92373594429552, 5},
+    {40.45438973440863, -86.92384446141101, 5},
+    {40.45436221002319, -86.92328713894122, 5}
 };
+
+const int num_waypoints = (sizeof(missionwaypoints) / sizeof(missionwaypoints[0]));
